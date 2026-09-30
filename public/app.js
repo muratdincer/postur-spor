@@ -1063,34 +1063,55 @@ function openVideo(id, title, trigger, start = 0) {
   $("videoTitle").textContent = title;
   $("videoLink").href = ytWatch(id, start);
   const iframe = h("iframe", {
-    src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?playsinline=1&rel=0&autoplay=1&mute=1${start > 0 ? `&start=${start}` : ""}`,
-    title, allow: "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture",
+    // playsinline=0: iPhone'da video oynamaya başlayınca iOS'un kendi tam ekran oynatıcısında açılır.
+    // enablejsapi: diğer cihazlarda oynatma olayını dinleyip tam ekrana geçmek için (fullscreenOnPlay).
+    src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?playsinline=0&rel=0&autoplay=1&mute=1` +
+      `&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${start > 0 ? `&start=${start}` : ""}`,
+    title, allow: "accelerometer; autoplay; encrypted-media; fullscreen; gyroscope; picture-in-picture",
     allowfullscreen: true, referrerpolicy: "strict-origin-when-cross-origin"
   });
   $("videoFrame").replaceChildren(iframe);
   $("videoModal").hidden = false;
   document.body.classList.add("modal-open");
   $("videoClose").focus();
-  enterFullscreen($("videoModal"));
+  fullscreenOnPlay(iframe);
 }
 
-// Destekleyen tarayıcılarda (Android, iPad, masaüstü) gerçek tam ekran; iPhone'da CSS ile tüm görünüm kaplanır.
-// Tıklama anında çağrılmalı (kullanıcı hareketi gerekir).
-function enterFullscreen(el) {
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+// YouTube IFrame API yalnızca oynatma olayını dinlemek için kullanılır; ilk popup açılışında yüklenir.
+let ytApi = null;
+function loadYtApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  return ytApi ||= new Promise((resolve, reject) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { prev?.(); resolve(window.YT); };
+    const s = document.createElement("script");
+    s.src = "https://www.youtube.com/iframe_api";
+    s.onerror = () => { ytApi = null; s.remove(); reject(new Error("YouTube API yüklenemedi")); };
+    document.head.append(s);
+  });
+}
+
+// Video oynamaya başlayınca oynatıcıyı tam ekrana alır (oynatıcıdaki tam ekran düğmesine basılmış gibi).
+// Tarayıcı izin vermezse (kullanıcı etkileşimi yok) sonraki oynatmada tekrar dener. iPhone'da Fullscreen API
+// yoktur; orada playsinline=0 ile iOS tam ekranı kendisi açar.
+function fullscreenOnPlay(iframe) {
+  const req = iframe.requestFullscreen || iframe.webkitRequestFullscreen;
   if (!req) return;
-  Promise.resolve(req.call(el)).then(() => screen.orientation?.lock?.("landscape")).catch(() => { /* desteklenmiyor */ });
-}
-
-function exitFullscreen() {
-  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-  if (!fsEl) return;
-  (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
+  loadYtApi().then((YT) => {
+    if (!iframe.isConnected) return;
+    let done = false;
+    new YT.Player(iframe, { events: { onStateChange: (e) => {
+      if (done || e.data !== YT.PlayerState.PLAYING || !iframe.isConnected) return;
+      done = true;
+      Promise.resolve(req.call(iframe))
+        .then(() => screen.orientation?.lock?.("landscape")?.catch(() => {}))
+        .catch(() => { done = false; });
+    } } });
+  }).catch(() => { /* API yüklenemezse video normal oynar */ });
 }
 
 function closeVideo() {
   $("videoFrame").replaceChildren(); // iframe'i kaldır (video durur)
-  exitFullscreen();
   $("videoModal").hidden = true;
   document.body.classList.remove("modal-open");
   if (modalReturnFocus && modalReturnFocus.focus) modalReturnFocus.focus();

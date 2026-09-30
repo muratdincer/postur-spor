@@ -232,29 +232,24 @@ h1, h2, h3, p { margin: 0; }
 }
 .timer-fab .t { font-size: 12px; font-weight: 700; }
 
-/* Modal: video popup'ı tam ekran açılır (tam ekran API'si olmayan iPhone'da da tüm görünümü kaplar) */
+/* Modal */
 .modal {
-  position: fixed; inset: 0; z-index: 100; background: #000;
-  display: flex; align-items: stretch; justify-content: stretch;
+  position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, .55);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: env(safe-area-inset-top) 0 0;
 }
 .modal-sheet {
-  width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff;
-  padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right))
-    calc(12px + var(--safe-b)) calc(12px + env(safe-area-inset-left));
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px;
+  width: 100%; max-width: 640px; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--card); border-radius: 20px 20px 0 0; padding: 14px 14px calc(14px + var(--safe-b));
+  display: grid; gap: 12px;
 }
 .modal-head { display: flex; align-items: center; gap: 8px; }
-.modal-head h2 { font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modal-head .btn-ghost { color: #fff; }
-.video-frame { position: relative; min-height: 0; container-type: size; background: #000; }
-.video-frame iframe {
-  position: absolute; inset: 0; margin: auto; border: 0; border-radius: 12px;
-  width: min(100cqw, 100cqh * 16 / 9); height: min(100cqh, 100cqw * 9 / 16); /* 16:9, alana sığan en büyük boyut */
-}
-@media (orientation: landscape) and (max-height: 500px) { /* yatay telefon: video için yer aç */
-  .modal-sheet { gap: 4px; padding-top: calc(2px + env(safe-area-inset-top)); padding-bottom: calc(6px + var(--safe-b)); }
-  .modal-head .btn { min-height: 32px; padding-block: 4px; }
-  #videoLink { display: none; }
+.modal-head h2 { font-size: 18px; flex: 1; }
+.video-frame { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+.video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+@media (min-width: 700px) {
+  .modal { align-items: center; padding: 20px; }
+  .modal-sheet { border-radius: 20px; }
 }
 
 @media (min-width: 700px) {
