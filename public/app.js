@@ -26,35 +26,10 @@ let PROGRAM = null;
 let EX = {};
 let PLAN = [];
 
-// Hareket videoları tek yerde: hareket kimliği → YouTube videosu. Program şablonundaki `video` alanı yalnızca
-// burada karşılığı olmayan hareketler için yedek olarak kullanılır. Yeni ID eklemeden önce oEmbed ile doğrula
-// (https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ID&format=json); uydurma ID ekleme.
-// `start`: videonun başlayacağı saniye (popup embed'i ve "YouTube'da aç" linki bu saniyeden açılır).
-const exerciseVideos = {
-  chinTuck: { id: "0tWxFbOHvRo", title: "Boyun düzleşmesinde kullanılan Chin Tuck egzersizi", channel: "Fizyoterapist Oğuz Özdemir", language: "tr" },
-  row: { id: "u3Yg9h0WZRY", title: "Dumbbell Incline Row Nasıl Yapılır", channel: "Gel Gel Hoca", language: "tr" },
-  lat: { id: "QDsllbOkwEs", title: "V-Bar Lat Pulldown Nasıl Yapılır", channel: "Gel Gel Hoca", language: "tr" },
-  reversePec: { id: "iklaLgWUgMs", title: "Machine Reverse Fly Nasıl Yapılır", channel: "MACFit", language: "tr" },
-  legPress: { id: "uVwrVUXBPec", title: "Leg Press Nasıl Yapılır", channel: "Cenk Hoca", language: "tr" },
-  legCurl: { id: "-xnlcqQCBC4", title: "Machine Seated Leg Curl Nasıl Yapılır", channel: "MACFit", language: "tr" },
-  hipThrust: { id: "D040DUMZuUs", title: "Hip Thrust Egzersizi Nasıl Yapılır? | Adım Adım Doğru Teknik", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
-  pallof: { id: "_2xWmYNnFS8", title: "Pallof press", channel: null, language: null },
-  openBook: { id: "OW6YHlxY6JI", title: "Open book", channel: null, language: null },
-  thoracic: { id: "9Y11Kc0E0og", title: "Foam roller thoracic extension", channel: null, language: null },
-  pecStretch: { id: "M850sCj9LHQ", title: "Doorway pec stretch", channel: null, language: null },
-  hipFlexor: { id: "qWMXPKLFF2A", title: "Half-kneeling hip-flexor stretch", channel: null, language: null },
-  deadBug: { id: "kGyhUpnw70E", title: "Dead Bug Egzersizi Nasıl Yapılır? (Core Bölgeni Güçlendir)", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
-  birdDog: { id: "VSvp8iEoLC8", title: "Bird Dog Egzersizi Nasıl Yapılır? (Core Stabilizasyonu & Bel Sağlığı)", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
-  chestPress: { id: "2wFMkurVmrQ", title: "Machine Chest Press Nasıl Yapılır?", channel: "MACFit", language: "tr" },
-  extRot: { id: "LpNgc6Vx4iY", title: "Cable external rotation", channel: null, language: null },
-  sidePlank: { id: "lvpPNjRQONQ", title: "Side plank (dizler yerde)", channel: null, language: null },
-  // Ev hareketleri
-  snowAngel: { id: "KEF6yQ8b4F8", title: "Reverse Snow Angel Nasıl Yapılır?", channel: "MACFit", language: "tr" },
-  wallSlide: { id: "Zz7-2Ya3iu8", title: "Wall Slide Egzersizi – Omuz ve Gövde Mobilizasyonu", channel: "Fizyoterapi Rehberi / Onur Kırcaoğlu", language: "tr" },
-  heelDigBridge: { id: "mUjc48MBKRk", title: "Hip-Hamstring Bridge Nasıl Yapılır? | Kalça ve Arka Bacak Güçlendirme", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
-  gluteBridge: { id: "R73ClX1LpAI", title: "Glute Bridge / Hamstring Bridge doğru form", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
-  wallPushUp: { id: "p9JDV4YxSBw", title: "Wall Push Up Nasıl Yapılır?", channel: "hegesports", language: "tr" }
-};
+// Hareket videoları: hareket kimliği → { id, title, channel, language, start }. Kodda tutulmaz; kullanıcının
+// Firestore alanında (users/{uid}/settings/videos, alan: items) durur, uygulama içinden "#videolar" ile aktarılır.
+// Burada karşılığı olmayan hareketlerde şablondaki `video` alanı yedek olarak kullanılır.
+let exerciseVideos = {};
 
 // Merkezi mapping önce, şablondaki `video` yedek. { id, start, title } döner; video yoksa null.
 function videoFor(exId) {
@@ -347,6 +322,40 @@ function lastWeight(exId, beforeDate) {
 
 const programRef = () => doc(db, "users", state.uid, "settings", "program");
 const programCacheKey = () => `postur-program-${state.uid}`;
+const videosRef = () => doc(db, "users", state.uid, "settings", "videos");
+const videosCacheKey = () => `postur-videos-${state.uid}`;
+
+// Firestore'dan video listesini okur; çevrimdışıyken yerel önbellek kullanılır.
+async function loadVideos() {
+  try {
+    const cached = validVideos(JSON.parse(lsGet(videosCacheKey())));
+    if (cached) exerciseVideos = cached;
+  } catch { /* önbellek yok */ }
+  try {
+    const snap = await getDoc(videosRef());
+    const items = snap.exists() ? validVideos(snap.data().items) : null;
+    exerciseVideos = items || {};
+    lsSet(videosCacheKey(), JSON.stringify(exerciseVideos));
+  } catch (err) {
+    console.warn("Videolar okunamadı:", err);
+  }
+}
+
+// { hareketId: { id, title, channel?, language?, start? } } biçimini doğrular ve temizler; geçersizse null.
+function validVideos(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  const out = {};
+  for (const [key, v] of Object.entries(obj)) {
+    if (!/^[A-Za-z0-9]{1,40}$/.test(key) || !v || typeof v !== "object") return null;
+    if (typeof v.id !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(v.id)) return null;
+    if (typeof v.title !== "string" || !v.title || v.title.length > 200) return null;
+    const start = v.start ?? 0;
+    if (!Number.isInteger(start) || start < 0 || start > 36000) return null;
+    const str = (x) => (typeof x === "string" && x.length <= 100 ? x : null);
+    out[key] = { id: v.id, title: v.title, channel: str(v.channel), language: str(v.language), start };
+  }
+  return out;
+}
 const PROGRAM_FIELDS = ["id", "version", "name", "safetyNote", "progression", "exercises", "days"];
 
 function validDay(d) {
@@ -1148,6 +1157,53 @@ function closeVideo() {
   if (modalReturnFocus && modalReturnFocus.focus) modalReturnFocus.focus();
 }
 
+// Video listesi içe aktarma: adresin sonuna #videolar eklenince açılır; JSON yalnızca kullanıcının kendi alanına yazılır.
+function openVideoImport() {
+  if (!state.uid) return;
+  $("importText").value = "";
+  $("importError").hidden = true;
+  $("importModal").hidden = false;
+  document.body.classList.add("modal-open");
+  $("importText").focus();
+}
+
+function closeVideoImport() {
+  $("importModal").hidden = true;
+  document.body.classList.remove("modal-open");
+  if (location.hash === "#videolar") history.replaceState(null, "", location.pathname + location.search);
+}
+
+async function saveVideoImport() {
+  const err = $("importError");
+  let items = null;
+  try { items = validVideos(JSON.parse($("importText").value)); } catch { /* geçersiz JSON */ }
+  if (!items || !Object.keys(items).length) {
+    err.textContent = "Geçersiz liste. JSON'u eksiksiz yapıştırdığından emin ol.";
+    err.hidden = false;
+    return;
+  }
+  $("importSave").disabled = true;
+  try {
+    await setDoc(videosRef(), { items, updatedAt: serverTimestamp() });
+    exerciseVideos = items;
+    lsSet(videosCacheKey(), JSON.stringify(items));
+    closeVideoImport();
+    renderCurrent();
+    alert(`${Object.keys(items).length} video kaydedildi.`);
+  } catch (e) {
+    err.textContent = "Kaydedilemedi. Bağlantını kontrol edip tekrar dene.";
+    err.hidden = false;
+  } finally {
+    $("importSave").disabled = false;
+  }
+}
+
+function initVideoImport() {
+  $("importCancel").addEventListener("click", closeVideoImport);
+  $("importSave").addEventListener("click", saveVideoImport);
+  window.addEventListener("hashchange", () => { if (location.hash === "#videolar") openVideoImport(); });
+}
+
 function initModal() {
   $("videoClose").addEventListener("click", closeVideo);
   $("videoModal").addEventListener("click", (e) => { if (e.target === $("videoModal")) closeVideo(); });
@@ -1201,18 +1257,20 @@ async function onSignedIn(user) {
   state.programState = "loading";
   PROGRAM = null; EX = {}; PLAN = [];
   await loadHistory();
-  await loadProgram();
+  await Promise.all([loadProgram(), loadVideos()]);
   restorePending();
   state.initialScroll = true;
   renderTabs();
   renderCurrent();
   if (!state.historyLoaded) loadSingleDay(weekDates()[state.selectedIdx]);
   migrateLegacy(); // beklenmez; arka planda
+  if (location.hash === "#videolar") openVideoImport();
 }
 
 function onSignedOut() {
   state.uid = null;
   PROGRAM = null; EX = {}; PLAN = [];
+  exerciseVideos = {};
   state.programState = "loading";
   state.docs = {};
   Object.values(debounceTimers).forEach(clearTimeout);
@@ -1295,6 +1353,7 @@ function boot() {
   initNav();
   initTimer();
   initModal();
+  initVideoImport();
   initLifecycle();
 
   if (!configured) {

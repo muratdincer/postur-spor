@@ -287,3 +287,4 @@ h1, h2, h3, p { margin: 0; }
 .tag.alt { background: var(--accent-soft); color: var(--accent); }
 
 .day-done { padding: 16px; text-align: center; font-weight: 700; color: var(--ok); }
+.import-text { width: 100%; font: 13px/1.4 ui-monospace, Menlo, monospace; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fafafc; color: var(--text); }

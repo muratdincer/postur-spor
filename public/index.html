@@ -102,6 +102,19 @@
         <a id="videoLink" class="btn btn-block" target="_blank" rel="noopener noreferrer">YouTube'da aç ↗</a>
       </div>
     </div>
+
+    <!-- VİDEO LİSTESİ İÇE AKTARMA (#videolar) -->
+    <div id="importModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle" hidden>
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h2 id="importTitle">Video listesini içe aktar</h2>
+        </div>
+        <textarea id="importText" class="import-text" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="JSON'u buraya yapıştır"></textarea>
+        <p id="importError" class="form-error" role="alert" hidden></p>
+        <button id="importSave" type="button" class="btn btn-primary btn-block">Kaydet</button>
+        <button id="importCancel" type="button" class="btn btn-ghost btn-block">İptal</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>
