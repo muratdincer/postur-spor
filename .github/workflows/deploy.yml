@@ -1,8 +1,9 @@
 name: Firebase deploy
 
-# main'e gelen her değişiklikte Hosting + Firestore kurallarını yayınlar.
+# main'e gelen her değişiklikte Hosting + Firestore kurallarını + program şablonlarını yayınlar.
 # Gerekli secret: FIREBASE_SERVICE_ACCOUNT (servis hesabı JSON anahtarının tamamı).
-# Hosting her seferinde, Firestore kuralları yalnızca firestore.rules değiştiğinde yayınlanır.
+# Hosting her seferinde; Firestore kuralları yalnızca firestore.rules, şablonlar yalnızca programs/ veya
+# scripts/publish-programs.mjs değiştiğinde (ya da elle çalıştırmada) yayınlanır.
 on:
   push:
     branches: [main]
@@ -10,6 +11,8 @@ on:
       - "public/**"
       - "firebase.json"
       - "firestore.rules"
+      - "programs/**"
+      - "scripts/**"
       - ".firebaserc"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
@@ -31,7 +34,7 @@ jobs:
           fetch-depth: 0
 
       - name: Program şablonlarını doğrula
-        run: for f in public/programs/*.json; do jq empty "$f" || exit 1; done
+        run: for f in programs/*.json; do jq empty "$f" || exit 1; done
 
       - uses: actions/setup-node@v4
         with:
@@ -59,3 +62,21 @@ jobs:
       - name: Firestore kuralları deploy
         if: steps.rules.outputs.changed == 'true'
         run: npx --yes firebase-tools@13 deploy --only firestore:rules --project postur-spor --non-interactive
+
+      # Program şablonları (kişisel sağlık notları içerir) Hosting'e değil Firestore'a yazılır.
+      # Servis hesabında "Cloud Datastore User" rolü gerekir.
+      - name: Program şablonları değişti mi?
+        id: programs
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null \
+             || ! git diff --quiet "$BEFORE" HEAD -- programs scripts/publish-programs.mjs; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Program şablonlarını Firestore'a yaz
+        if: steps.programs.outputs.changed == 'true'
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix scripts firebase-admin@12
+          node scripts/publish-programs.mjs

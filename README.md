@@ -8,9 +8,10 @@ public/index.html          arayüz iskeleti
 public/styles.css          stiller
 public/app.js              program, set takibi, timer, geçmiş, istatistik, Firebase
 public/firebase-config.js  ← firebaseConfig BURAYA yapıştırılır
-public/programs/           program şablonları + kullanıcı atamaları
+programs/                  program şablonları + kullanıcı atamaları (Hosting'e çıkmaz, Firestore'a yazılır)
+scripts/publish-programs.mjs  programs/ → Firestore (deploy workflow'u çalıştırır)
 firebase.json              Hosting + Firestore rules ayarı
-firestore.rules            kullanıcı yalnızca kendi verisine erişir
+firestore.rules            kullanıcı yalnızca kendi verisine ve kendisine atanmış şablona erişir
 ```
 
 ## 1) Firebase Console'da yapılacaklar (elle)
@@ -49,7 +50,7 @@ Bir kerelik kurulum:
 1. Firebase Console → Proje ayarları → **Hizmet hesapları** → **Yeni özel anahtar oluştur** → JSON dosyası iner.
 2. GitHub → repo → Settings → Secrets and variables → Actions → **New repository secret**: ad `FIREBASE_SERVICE_ACCOUNT`, değer JSON dosyasının tamamı.
 3. JSON dosyasını bilgisayardan sil; repoya asla ekleme.
-4. Servis hesabının rolleri (Google Cloud Console → IAM): **Firebase Hosting Admin** ve **Firebase Rules Admin**. Rules Admin yoksa kural deploy'u 403 verir. Kurallar yalnızca `firestore.rules` değiştiğinde yayınlandığından Hosting deploy'u bundan etkilenmez.
+4. Servis hesabının rolleri (Google Cloud Console → IAM): **Firebase Hosting Admin**, **Firebase Rules Admin** ve **Cloud Datastore User**. Rules Admin yoksa kural deploy'u, Cloud Datastore User yoksa şablon yayını 403 verir. Kurallar yalnızca `firestore.rules` değiştiğinde yayınlandığından Hosting deploy'u bundan etkilenmez.
 
 ## Veri modeli
 
@@ -69,8 +70,8 @@ Bir kerelik kurulum:
 
 Her kullanıcının programı Firestore'da `users/{uid}/settings/program` dokümanında durur ve uygulama programı oradan okur.
 
-- Şablonlar: `public/programs/<şablon-id>.json` (hareket kütüphanesi `exercises` + 7 günlük `days`, güvenlik notu, ilerleme notları).
-- Atama: `public/programs/assignments.json` → `"users": { "<UID>": "<şablon-id>" }`.
+- Şablonlar: `programs/<şablon-id>.json` (hareket kütüphanesi `exercises` + 7 günlük `days`, güvenlik notu, ilerleme notları). Kişisel sağlık notu içerdikleri için Hosting'e konmaz; deploy workflow'u `programs/` değişince `scripts/publish-programs.mjs` ile Firestore `templates/<şablon-id>` dokümanına yazar.
+- Atama: `programs/assignments.json` → `"users": { "<UID>": "<şablon-id>" }` (Firestore `config/assignments`). Şablonu yalnızca burada ona atanmış kullanıcı okuyabilir; atama yoksa kullanıcı Firestore'daki mevcut programıyla devam eder ama şablon güncellemesi almaz.
 - Yeni kullanıcı ilk girişte programı yoksa "Program atanmadı" ekranında kendi **UID**'sini görür. Bu UID ile şablon atanıp deploy edilince, bir sonraki açılışta şablon kullanıcının Firestore kaydına yazılır.
 - Şablonda `version` artırılıp deploy edilirse, o şablona atanmış (ya da `assignments.json`'da ataması olmayıp Firestore'daki programı aynı şablon `id`'sini taşıyan) kullanıcıların programı güncellenir.
 - `existingUsersDefault`: bu özellikten önce kayıt tutmuş (programı olmayan) kullanıcıya otomatik verilen şablon.

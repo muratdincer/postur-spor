@@ -18,7 +18,8 @@ const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartes
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 // Program kullanıcıya özeldir ve Firestore'da users/{uid}/settings/program dokümanında durur.
-// Şablonlar public/programs/*.json, kullanıcı → şablon eşlemesi public/programs/assignments.json.
+// Şablonlar Firestore templates/{id}, kullanıcı → şablon eşlemesi config/assignments (repo: programs/*.json,
+// deploy workflow'u yazar; Hosting'de yoktur, yalnızca giriş yapmış kullanıcı okuyabilir).
 // EX: hareket kütüphanesi (weight: true → kg alanı, video: YouTube ID, alt: salon↔ev karşılığı),
 // PLAN: Pazartesi..Pazar 7 gün; her günün salon programı kendisi, ev alternatifi `home` alanıdır.
 let PROGRAM = null;
@@ -380,12 +381,6 @@ function applyProgram(p) {
   $("progressionList").replaceChildren(...(prog?.items || []).map((t) => h("li", { text: t })));
 }
 
-async function fetchJson(url) {
-  const r = await fetch(url, { cache: "no-cache" });
-  if (!r.ok) throw new Error(`${url}: ${r.status}`);
-  return r.json();
-}
-
 function hasLegacyLocal() {
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -417,7 +412,9 @@ async function loadProgram() {
 
   let assignedId = null;
   try {
-    const a = await fetchJson("programs/assignments.json");
+    const snap = await getDoc(doc(db, "config", "assignments"));
+    if (!snap.exists()) throw new Error("config/assignments yok");
+    const a = snap.data();
     assignedId = a.users?.[state.uid] || null;
     // Programı henüz olmayan ama zaten kayıtları bulunan (bu özellikten önceki) kullanıcıya varsayılan şablon.
     if (!assignedId && storedOk && !stored && a.existingUsersDefault &&
@@ -432,7 +429,9 @@ async function loadProgram() {
 
   if (assignedId && storedOk && /^[a-z0-9-]+$/i.test(assignedId)) {
     try {
-      const tpl = await fetchJson(`programs/${assignedId}.json`);
+      const snap = await getDoc(doc(db, "templates", assignedId));
+      if (!snap.exists()) throw new Error(`templates/${assignedId} yok`);
+      const tpl = snap.data();
       const outdated = !stored || stored.id !== tpl.id || (stored.version || 0) < (tpl.version || 0);
       if (validProgram(tpl) && outdated) {
         stored = pickProgram(tpl);

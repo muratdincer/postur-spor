@@ -9,5 +9,17 @@ service cloud.firestore {
                          && request.auth.uid == userId;
     }
 
+    // Program şablonları (kişisel sağlık notu içerir): yalnızca config/assignments'ta bu şablona açıkça
+    // atanmış kullanıcı okur (kullanıcının kendi yazabildiği bir alana dayanmaz).
+    // Yazma yalnızca deploy workflow'undaki servis hesabıyla (Admin SDK, kurallardan muaf).
+    match /templates/{templateId} {
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/config/assignments).data.get("users", {}).get(request.auth.uid, null) == templateId;
+    }
+    // Kullanıcı → şablon eşlemesi (yalnızca UID ve şablon adı).
+    match /config/assignments {
+      allow read: if request.auth != null;
+    }
+
   }
 }
