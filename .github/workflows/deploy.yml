@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0
 
       - name: Program şablonlarını doğrula
-        run: for f in programs/*.json; do jq empty "$f" || exit 1; done
+        run: shopt -s nullglob; for f in programs/*.json; do jq empty "$f" || exit 1; done
 
       - uses: actions/setup-node@v4
         with:

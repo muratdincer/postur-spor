@@ -19,7 +19,7 @@ const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz"
 
 // Program kullanıcıya özeldir ve Firestore'da users/{uid}/settings/program dokümanında durur.
 // Şablonlar Firestore templates/{id} (kişisel sağlık bilgisi içerir, repoda tutulmaz), kullanıcı → şablon eşlemesi
-// config/assignments (repo: programs/assignments.json, deploy workflow'u yazar). Yalnızca atanmış kullanıcı şablonu okur.
+// config/assignments (yalnızca Firestore'da; UID'ler repoda tutulmaz). Yalnızca atanmış kullanıcı şablonu okur.
 // EX: hareket kütüphanesi (weight: true → kg alanı, video: YouTube ID, alt: salon↔ev karşılığı),
 // PLAN: Pazartesi..Pazar 7 gün; her günün salon programı kendisi, ev alternatifi `home` alanıdır.
 let PROGRAM = null;
@@ -391,7 +391,7 @@ function hasLegacyLocal() {
   return false;
 }
 
-// Program kaynağı Firestore'dur. assignments.json'da kullanıcıya bir şablon atanmışsa ve Firestore'daki
+// Program kaynağı Firestore'dur. config/assignments'ta kullanıcıya bir şablon atanmışsa ve Firestore'daki
 // program yoksa / farklı şablonsa / eski sürümse, şablon Firestore'a yazılır. Çevrimdışıyken önbellek kullanılır.
 async function loadProgram() {
   if (!PROGRAM) {
