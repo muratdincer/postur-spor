@@ -25,6 +25,35 @@ let PROGRAM = null;
 let EX = {};
 let PLAN = [];
 
+// Hareket videoları tek yerde: hareket kimliği → YouTube videosu. Program şablonundaki `video` alanı yalnızca
+// burada karşılığı olmayan hareketler için yedek olarak kullanılır. Yeni ID eklemeden önce oEmbed ile doğrula
+// (https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ID&format=json); uydurma ID ekleme.
+// TODO: Türkçe + erkek demonstratörlü videolara geçiş. Adaylar henüz doğrulanmadı (erişim, varyasyon, demonstratör):
+//   legPress uVwrVUXBPec (Cenk Hoca) · lat BL0Q7ipPYxw (MACFit) · legCurl -xnlcqQCBC4 (MACFit)
+//   row s3YVyKAR7r8 (MACFit, seated row, göğüs destekli mi kontrol et) · reversePec RAmzeOO5XaE (MACFit)
+//   hipThrust D040DUMZuUs · deadBug kGyhUpnw70E · birdDog VSvp8iEoLC8 (Egzersiz Rehberim - Ege Berk Büyüksu)
+const exerciseVideos = {
+  chinTuck: { id: "h_1-7H0eOfo", title: "Chin tuck / chin nod", channel: null, language: null },
+  row: { id: "FU6YQawma2Q", title: "Chest-supported row", channel: null, language: null },
+  lat: { id: "Btoos8xwhkk", title: "Neutral-grip lat pulldown", channel: null, language: null },
+  reversePec: { id: "qdYLu49hg1c", title: "Reverse pec deck", channel: null, language: null },
+  legPress: { id: "cDGOn-yfKJA", title: "Leg press", channel: null, language: null },
+  legCurl: { id: "_2Kd0d-JEUM", title: "Seated leg curl", channel: null, language: null },
+  hipThrust: { id: "dkf8iq4sh8k", title: "Hip thrust", channel: null, language: null },
+  pallof: { id: "_2xWmYNnFS8", title: "Pallof press", channel: null, language: null },
+  openBook: { id: "OW6YHlxY6JI", title: "Open book", channel: null, language: null },
+  thoracic: { id: "9Y11Kc0E0og", title: "Foam roller thoracic extension", channel: null, language: null },
+  pecStretch: { id: "M850sCj9LHQ", title: "Doorway pec stretch", channel: null, language: null },
+  hipFlexor: { id: "qWMXPKLFF2A", title: "Half-kneeling hip-flexor stretch", channel: null, language: null },
+  deadBug: { id: "bxn9FBrt4-A", title: "Dead bug", channel: null, language: null },
+  birdDog: { id: "ZdAHe9_HeEw", title: "Bird dog", channel: null, language: null },
+  chestPress: { id: "lRo9zZ7EwpM", title: "Machine chest press", channel: null, language: null },
+  extRot: { id: "LpNgc6Vx4iY", title: "Cable external rotation", channel: null, language: null },
+  sidePlank: { id: "lvpPNjRQONQ", title: "Side plank (dizler yerde)", channel: null, language: null }
+};
+
+const videoFor = (exId) => exerciseVideos[exId]?.id || EX[exId]?.video || null;
+
 /* ============================================================
    YARDIMCILAR
    ============================================================ */
@@ -587,7 +616,46 @@ function renderProgram() {
     panel.replaceChildren(head, h("div", { class: "empty", text: "Kayıtlar yükleniyor…" }));
     return;
   }
-  panel.replaceChildren(head, h("div", { class: "view" }, plan.items.map((item, n) => exerciseCard(date, item, n, mode))));
+  panel.replaceChildren(head, h("div", { class: "view" },
+    plan.items.map((item, n) => exerciseCard(date, item, n, mode)),
+    h("div", { id: "dayDone", class: "card day-done", role: "status", hidden: !dayComplete(date, plan), text: "Antrenman tamamlandı ✓" })
+  ));
+}
+
+function currentPlan() {
+  const day = PLAN[state.selectedIdx];
+  return day?.home && state.mode === "home" ? day.home : day;
+}
+
+function dayComplete(date, plan) {
+  if (!plan || plan.rest || !plan.items?.length) return false;
+  const d = state.docs[date];
+  return plan.items.every((it) => {
+    const sets = d?.exercises[it.key]?.sets;
+    return sets?.length > 0 && sets.every((s) => s.completed);
+  });
+}
+
+function refreshDayDone(date) {
+  const el = $("dayDone");
+  if (el) el.hidden = !dayComplete(date, currentPlan());
+}
+
+function scrollToCard(el) {
+  const header = document.querySelector(".topbar");
+  el.style.scrollMarginTop = `${(header ? header.offsetHeight : 0) + 12}px`; // sticky başlık + gün sekmeleri altında kalmasın
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
+
+// Bir hareketin tüm setleri kullanıcı tarafından tamamlandığında sonraki karta kaydırır; son hareketse gün durumunu gösterir.
+function onExerciseDone(card, date) {
+  refreshDayDone(date);
+  let next = card?.nextElementSibling;
+  while (next && !next.classList.contains("ex")) next = next.nextElementSibling;
+  if (next) { scrollToCard(next); return; }
+  const done = $("dayDone");
+  if (done && !done.hidden) scrollToCard(done);
 }
 
 function exerciseCard(date, item, order, mode = "gym") {
@@ -596,6 +664,7 @@ function exerciseCard(date, item, order, mode = "gym") {
   const lib = home ? { ...base, weight: false } : base; // evde kg alanı yok
   const name = item.name || lib.name;
   const altName = lib.alt && EX[lib.alt]?.name;
+  const video = videoFor(item.ex);
   const entry = state.docs[date]?.exercises[item.key];
   const setsData = () => ensureEntry(date, item, order).sets;
   const initial = entry ? entry.sets : Array.from({ length: item.sets }, () => ({ completed: false, weight: null }));
@@ -641,6 +710,9 @@ function exerciseCard(date, item, order, mode = "gym") {
       btn.setAttribute("aria-pressed", String(cur.completed));
       saveNow(date);
       if (cur.completed && $("autoTimer").checked) timerStart(90);
+      // Yalnızca kullanıcı bir seti işaretleyip hareketin tüm setleri bittiğinde ilerle (geri almada kaydırma yok).
+      if (cur.completed && e.sets.every((x) => x.completed)) onExerciseDone(btn.closest(".ex"), date);
+      else refreshDayDone(date);
     });
     return h("div", { class: "set-row" },
       h("span", { class: "set-label", text: `Set ${i + 1}` }),
@@ -663,11 +735,11 @@ function exerciseCard(date, item, order, mode = "gym") {
   };
 
   const videoTitle = name;
-  const media = lib.video
+  const media = video
     ? h("button", {
         type: "button", class: "thumb", "aria-label": `${name} videosunu aç`,
-        onclick: (ev) => openVideo(lib.video, videoTitle, ev.currentTarget)
-      }, thumbImg(lib.video, name), h("span", { class: "play", "aria-hidden": "true", text: "▶" }))
+        onclick: (ev) => openVideo(video, videoTitle, ev.currentTarget)
+      }, thumbImg(video, name), h("span", { class: "play", "aria-hidden": "true", text: "▶" }))
     : h("div", { class: "thumb static" }, h("img", { src: placeholderImg(name), alt: name, loading: "lazy" }));
 
   return h("article", { class: "card ex" },
@@ -696,8 +768,8 @@ function exerciseCard(date, item, order, mode = "gym") {
       h("button", { type: "button", class: "btn small", "aria-label": "Set çıkar", text: "−", onclick: () => changeSets(-1) }),
       h("button", { type: "button", class: "btn small", "aria-label": "Set ekle", text: "+", onclick: () => changeSets(1) }),
       h("button", { type: "button", class: "btn", text: "⏱ Dinlenme", onclick: () => timerStart() }),
-      lib.video
-        ? h("a", { class: "btn", href: ytWatch(lib.video), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da aç ↗" })
+      video
+        ? h("a", { class: "btn", href: ytWatch(video), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da aç ↗" })
         : h("a", { class: "btn", href: ytSearch(lib.search || name), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da ara ↗" })
     )
   );

@@ -277,3 +277,5 @@ h1, h2, h3, p { margin: 0; }
 .ex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #f0f0f4; color: var(--muted); }
 .tag.alt { background: var(--accent-soft); color: var(--accent); }
+
+.day-done { padding: 16px; text-align: center; font-weight: 700; color: var(--ok); }
