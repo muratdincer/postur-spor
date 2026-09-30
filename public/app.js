@@ -979,7 +979,7 @@ function openVideo(id, title, trigger) {
   $("videoTitle").textContent = title;
   $("videoLink").href = ytWatch(id);
   const iframe = h("iframe", {
-    src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?playsinline=1&rel=0`,
+    src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?playsinline=1&rel=0&autoplay=1&mute=1`,
     title, allow: "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture",
     allowfullscreen: true, referrerpolicy: "strict-origin-when-cross-origin"
   });
