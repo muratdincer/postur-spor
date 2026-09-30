@@ -1,4 +1,6 @@
 {
   "existingUsersDefault": "postur-baslangic",
-  "users": {}
+  "users": {
+    "[kaldırıldı]": "postur-baslangic"
+  }
 }
