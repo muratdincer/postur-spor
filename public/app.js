@@ -17,174 +17,12 @@ import { firebaseConfig } from "./firebase-config.js";
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
-// weight: true → kg alanı gösterilir. video: YouTube ID (yoksa arama linki kullanılır).
-const EX = {
-  bike: {
-    name: "Sabit bisiklet", weight: false, search: "sabit bisiklet doğru kullanım",
-    purpose: "Isınma ve hafif kardiyo.",
-    form: "Rahat tempo; nefes nefese kalmadan pedalla."
-  },
-  chinTuck: {
-    name: "Chin tuck / chin nod", weight: false, video: "h_1-7H0eOfo",
-    purpose: "Derin boyun fleksörlerini ve baş-boyun pozisyon kontrolünü geliştirmek.",
-    form: "Çeneyi aşağı bastırma. Hafifçe geriye al. Ağrı yaratacak kadar zorlama."
-  },
-  row: {
-    name: "Chest-supported row", weight: true, video: "FU6YQawma2Q",
-    purpose: "Üst sırt, kürek kemiği kontrolü ve çekiş dayanıklılığı.",
-    form: "Göğüs destekli makine. Omuzları kulaklara doğru kaldırma."
-  },
-  lat: {
-    name: "Neutral-grip lat pulldown", weight: true, video: "Btoos8xwhkk",
-    purpose: "Kanat ve üst sırt kuvveti.",
-    form: "Enseye çekme. Göğsün önüne doğru çek. Boyun rahat kalsın."
-  },
-  reversePec: {
-    name: "Reverse pec deck", weight: true, video: "qdYLu49hg1c",
-    purpose: "Arka omuz ve kürek kemiği çevresi.",
-    form: "[kaldırıldı]"
-  },
-  legPress: {
-    name: "Leg press", weight: true, video: "cDGOn-yfKJA",
-    purpose: "Bacak ve kalça kuvveti.",
-    form: "[kaldırıldı]"
-  },
-  legCurl: {
-    name: "Seated leg curl", weight: true, video: "_2Kd0d-JEUM",
-    purpose: "Hamstring güçlendirme.",
-    form: "Kontrollü tempo."
-  },
-  hipThrust: {
-    name: "Hip thrust", weight: true, video: "dkf8iq4sh8k",
-    purpose: "Glute kuvveti ve pelvis kontrolü.",
-    form: "Tepede beli aşırı çukurlaştırma."
-  },
-  pallof: {
-    name: "Pallof press", weight: true, video: "_2xWmYNnFS8",
-    purpose: "Anti-rotation core stabilitesi.",
-    form: "Gövde dönmeden sabit tutulmalı."
-  },
-  openBook: {
-    name: "Open book", weight: false, video: "OW6YHlxY6JI",
-    purpose: "Thoracic rotation mobility.",
-    form: "Belden zorlayarak dönme."
-  },
-  thoracic: {
-    name: "Foam roller thoracic extension", weight: false, video: "9Y11Kc0E0og",
-    purpose: "Üst sırt extension mobility.",
-    form: "Boynu geriye düşürme. Beli aşırı çukurlaştırma."
-  },
-  pecStretch: {
-    name: "Doorway pec stretch", weight: false, video: "M850sCj9LHQ",
-    purpose: "Göğüs / ön omuz mobilitesi.",
-    form: "[kaldırıldı]"
-  },
-  hipFlexor: {
-    name: "Half-kneeling hip-flexor stretch", weight: false, video: "qWMXPKLFF2A",
-    purpose: "Kalça ön tarafı mobilitesi.",
-    form: "Bel çukurunu artırmadan yap."
-  },
-  deadBug: {
-    name: "Dead bug", weight: false, video: "bxn9FBrt4-A",
-    purpose: "Core ve pelvis kontrolü.",
-    form: "Bel kontrolünü kaybedersen hareket mesafesini küçült."
-  },
-  birdDog: {
-    name: "Bird dog", weight: false, video: "ZdAHe9_HeEw",
-    purpose: "Bel-pelvis ve çapraz stabilite.",
-    form: "Kalçayı döndürme."
-  },
-  chestPress: {
-    name: "Machine chest press", weight: true, video: "lRo9zZ7EwpM",
-    purpose: "İtiş kuvveti.",
-    form: "[kaldırıldı]"
-  },
-  extRot: {
-    name: "Cable external rotation", weight: true, video: "LpNgc6Vx4iY",
-    purpose: "Rotator cuff ve omuz kontrolü.",
-    form: "Çok hafif ağırlık. Dirsek gövdeye yakın."
-  },
-  sidePlank: {
-    name: "Side plank (dizler yerde)", weight: false, video: "lvpPNjRQONQ",
-    purpose: "Yan core stabilitesi.",
-    form: "Başlangıçta dizler yerde."
-  }
-};
-
-// key: Firestore'da kayıt anahtarı (aynı hareket bir günde iki kez geçebildiği için ayrı).
-const P = (ex, sets, reps, extra = {}) => ({ ex, key: extra.key || ex, sets, reps, ...extra });
-
-const CARDIO_DAY = {
-  title: "Kardiyo + mobilite + core",
-  items: [
-    P("bike", 1, "25–30 dk", { hint: "Konuşabilecek tempo", key: "bikeMain" }),
-    P("openBook", 2, "8 / taraf"),
-    P("thoracic", 2, "6"),
-    P("pecStretch", 2, "30 sn"),
-    P("hipFlexor", 2, "30 sn / taraf"),
-    P("chinTuck", 2, "8", { hint: "Her tekrarda 5 sn" }),
-    P("deadBug", 2, "6 / taraf"),
-    P("birdDog", 2, "6 / taraf")
-  ]
-};
-
-const PLAN = [
-  { // Pazartesi
-    rest: true, title: "Dinlenme günü",
-    lines: ["Salon kapalı. Planlı kuvvet antrenmanı yok.", "[kaldırıldı]"]
-  },
-  { // Salı
-    title: "Kuvvet A + postür",
-    items: [
-      P("bike", 1, "8–10 dk", { key: "bikeStart" }),
-      P("chinTuck", 2, "8", { hint: "Her tekrarda 5 sn" }),
-      P("row", 2, "12"),
-      P("lat", 2, "10–12"),
-      P("reversePec", 2, "12"),
-      P("legPress", 2, "12"),
-      P("legCurl", 2, "12"),
-      P("hipThrust", 2, "12", { name: "Hip thrust machine" }),
-      P("pallof", 2, "10 / taraf"),
-      P("bike", 1, "10 dk hafif", { key: "bikeEnd" })
-    ]
-  },
-  CARDIO_DAY, // Çarşamba
-  { // Perşembe
-    title: "Kuvvet B + omuz kontrolü",
-    items: [
-      P("bike", 1, "10 dk", { key: "bikeStart" }),
-      P("legPress", 2, "12"),
-      P("legCurl", 2, "12"),
-      P("hipThrust", 2, "12"),
-      P("row", 2, "12"),
-      P("chestPress", 2, "10"),
-      P("extRot", 2, "12 / taraf"),
-      P("sidePlank", 2, "15–20 sn / taraf"),
-      P("deadBug", 2, "6 / taraf"),
-      P("bike", 1, "10 dk hafif", { key: "bikeEnd" })
-    ]
-  },
-  { title: "Kardiyo + mobilite + core", items: CARDIO_DAY.items, note: "Çarşamba programının aynısı." }, // Cuma
-  { // Cumartesi
-    title: "Kuvvet C + postür",
-    items: [
-      P("bike", 1, "8–10 dk", { key: "bikeStart" }),
-      P("legPress", 2, "12"),
-      P("legCurl", 2, "12"),
-      P("row", 2, "12"),
-      P("lat", 2, "12"),
-      P("reversePec", 2, "12"),
-      P("hipThrust", 2, "12"),
-      P("pallof", 2, "10 / taraf"),
-      P("birdDog", 2, "6 / taraf"),
-      P("bike", 1, "10 dk hafif", { key: "bikeEnd" })
-    ]
-  },
-  { // Pazar
-    rest: true, title: "Dinlenme günü",
-    lines: ["Planlı kuvvet antrenmanı yok. İstersen rahat tempoda yürüyüş yapabilirsin.", "[kaldırıldı]"]
-  }
-];
+// Program kullanıcıya özeldir ve Firestore'da users/{uid}/settings/program dokümanında durur.
+// Şablonlar public/programs/*.json, kullanıcı → şablon eşlemesi public/programs/assignments.json.
+// EX: hareket kütüphanesi (weight: true → kg alanı, video: YouTube ID), PLAN: Pazartesi..Pazar 7 gün.
+let PROGRAM = null;
+let EX = {};
+let PLAN = [];
 
 /* ============================================================
    YARDIMCILAR
@@ -268,7 +106,8 @@ const state = {
   totalWorkouts: null,
   totalDirty: true,
   historyShown: 30,
-  openHistory: new Set()
+  openHistory: new Set(),
+  programState: "loading" // loading | ready | missing
 };
 
 const debounceTimers = {};
@@ -344,7 +183,7 @@ function ensureEntry(date, item, order) {
   let e = d.exercises[item.key];
   if (!e) {
     e = d.exercises[item.key] = {
-      exId: item.ex, name: item.name || EX[item.ex].name, order,
+      exId: item.ex, name: item.name || EX[item.ex]?.name || item.ex, order,
       sets: Array.from({ length: item.sets }, () => ({ completed: false, weight: null })),
       touched: false
     };
@@ -463,6 +302,125 @@ function lastWeight(exId, beforeDate) {
   return null;
 }
 
+/* ---------- Kişiye özel program ---------- */
+
+const programRef = () => doc(db, "users", state.uid, "settings", "program");
+const programCacheKey = () => `postur-program-${state.uid}`;
+const PROGRAM_FIELDS = ["id", "version", "name", "safetyNote", "progression", "exercises", "days"];
+
+function validProgram(p) {
+  if (!p || typeof p !== "object" || typeof p.exercises !== "object" || !Array.isArray(p.days) || p.days.length !== 7) return false;
+  return p.days.every((d) => d && (d.rest || (Array.isArray(d.items) && d.items.every((it) =>
+    it && typeof it.ex === "string" && typeof it.key === "string" && Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10))));
+}
+
+// Yalnızca program alanlarını al (Firestore Timestamp vb. dışarıda kalsın).
+function pickProgram(p) {
+  const out = {};
+  for (const k of PROGRAM_FIELDS) if (p[k] !== undefined) out[k] = p[k];
+  return out;
+}
+
+function applyProgram(p) {
+  PROGRAM = pickProgram(p);
+  EX = PROGRAM.exercises;
+  PLAN = PROGRAM.days;
+  state.programState = "ready";
+  lsSet(programCacheKey(), JSON.stringify(PROGRAM));
+
+  $("safetyText").textContent = PROGRAM.safetyNote || "";
+  $("safetyNote").hidden = !PROGRAM.safetyNote;
+  const prog = PROGRAM.progression;
+  $("progression").hidden = !prog?.items?.length;
+  $("progressionTitle").textContent = prog?.title || "İlerleme";
+  $("progressionList").replaceChildren(...(prog?.items || []).map((t) => h("li", { text: t })));
+}
+
+async function fetchJson(url) {
+  const r = await fetch(url, { cache: "no-cache" });
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  return r.json();
+}
+
+function hasLegacyLocal() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("postur-check-") || k.startsWith("postur-v3-"))) return true;
+    }
+  } catch { /* yoksay */ }
+  return false;
+}
+
+// Program kaynağı Firestore'dur. assignments.json'da kullanıcıya bir şablon atanmışsa ve Firestore'daki
+// program yoksa / farklı şablonsa / eski sürümse, şablon Firestore'a yazılır. Çevrimdışıyken önbellek kullanılır.
+async function loadProgram() {
+  if (!PROGRAM) {
+    try {
+      const cached = JSON.parse(lsGet(programCacheKey()));
+      if (validProgram(cached)) applyProgram(cached);
+    } catch { /* önbellek yok */ }
+  }
+
+  let stored = null, storedOk = false;
+  try {
+    const snap = await getDoc(programRef());
+    storedOk = true;
+    if (snap.exists()) stored = snap.data();
+  } catch (err) {
+    console.error("Program okunamadı:", err);
+  }
+
+  let assignedId = null;
+  try {
+    const a = await fetchJson("programs/assignments.json");
+    assignedId = a.users?.[state.uid] || null;
+    // Programı henüz olmayan ama zaten kayıtları bulunan (bu özellikten önceki) kullanıcıya varsayılan şablon.
+    if (!assignedId && storedOk && !stored && a.existingUsersDefault &&
+        (Object.keys(state.docs).length > 0 || hasLegacyLocal())) {
+      assignedId = a.existingUsersDefault;
+    }
+  } catch (err) {
+    console.warn("Program ataması okunamadı:", err);
+  }
+
+  if (assignedId && storedOk && /^[a-z0-9-]+$/i.test(assignedId)) {
+    try {
+      const tpl = await fetchJson(`programs/${assignedId}.json`);
+      const outdated = !stored || stored.id !== tpl.id || (stored.version || 0) < (tpl.version || 0);
+      if (validProgram(tpl) && outdated) {
+        stored = pickProgram(tpl);
+        await setDoc(programRef(), { ...stored, assignedAt: serverTimestamp() });
+      }
+    } catch (err) {
+      console.error("Program şablonu yüklenemedi:", err);
+    }
+  }
+
+  if (validProgram(stored)) applyProgram(stored);
+  else if (!PROGRAM) state.programState = storedOk ? "missing" : "error";
+}
+
+function noProgramCard() {
+  const missing = state.programState === "missing";
+  const uidBox = h("code", { class: "uid", text: state.uid || "" });
+  const copyBtn = h("button", {
+    type: "button", class: "btn", text: "Kimliği kopyala",
+    onclick: async () => {
+      try { await navigator.clipboard.writeText(state.uid); copyBtn.textContent = "Kopyalandı ✓"; }
+      catch { copyBtn.textContent = "Kimliği elle seçip kopyalayın"; }
+    }
+  });
+  return missing
+    ? h("div", { class: "card day-head no-program" },
+        h("h2", { text: "Program atanmadı" }),
+        h("p", { class: "sub", text: "Size henüz kişisel bir program tanımlanmamış. Aşağıdaki kullanıcı kimliğini program hazırlayan kişiye iletin." }),
+        uidBox, copyBtn)
+    : h("div", { class: "card day-head no-program" },
+        h("h2", { text: "Program yüklenemedi" }),
+        h("p", { class: "sub", text: "Bağlantıyı kontrol edip sayfayı yenileyin." }));
+}
+
 // Eski uygulamadaki anahtarlar: postur-check-<gün>-<n> ("1"), postur-v3-<gün>-<n>-set-<i> ("1"),
 // postur-v3-<gün>-<n>-kg-<i> (sayı). Gün kodları: pzt sal car per cum cmt pzr.
 const LEGACY_DAYS = { pzt: 0, sal: 1, car: 2, per: 3, cum: 4, cmt: 5, pzr: 6 };
@@ -470,7 +428,8 @@ const LEGACY_DAYS = { pzt: 0, sal: 1, car: 2, per: 3, cum: 4, cmt: 5, pzr: 6 };
 function legacyToday(legacy) {
   const idx = dayIndex(new Date());
   const code = Object.keys(LEGACY_DAYS).find((c) => LEGACY_DAYS[c] === idx);
-  const items = PLAN[idx].items;
+  if (PROGRAM?.id !== "postur-baslangic") return null; // eski anahtarlar yalnızca bu programa karşılık gelir
+  const items = PLAN[idx]?.items;
   if (!items) return null;
   const sets = {}; // n -> { done:bool, sets:{i:{completed,weight}} }
   for (const [k, v] of Object.entries(legacy)) {
@@ -574,9 +533,14 @@ function selectDay(i) {
 
 function renderProgram() {
   const idx = state.selectedIdx;
-  const plan = PLAN[idx];
   const date = weekDates()[idx];
   const panel = $("dayPanel");
+  if (!PROGRAM) {
+    panel.replaceChildren(state.programState === "missing" ? noProgramCard()
+      : h("div", { class: "card empty", text: "Program yükleniyor…" }));
+    return;
+  }
+  const plan = PLAN[idx];
 
   const head = h("div", { class: "card day-head" },
     h("h2", { text: DAYS[idx] }),
@@ -585,7 +549,7 @@ function renderProgram() {
   );
 
   if (plan.rest) {
-    head.append(h("ul", { class: "rest-list" }, plan.lines.map((l) => h("li", { text: l }))));
+    head.append(h("ul", { class: "rest-list" }, (plan.lines || []).map((l) => h("li", { text: l }))));
     panel.replaceChildren(head);
     return;
   }
@@ -597,7 +561,7 @@ function renderProgram() {
 }
 
 function exerciseCard(date, item, order) {
-  const lib = EX[item.ex];
+  const lib = EX[item.ex] || { name: item.ex, weight: false };
   const name = item.name || lib.name;
   const entry = state.docs[date]?.exercises[item.key];
   const setsData = () => ensureEntry(date, item, order).sets;
@@ -686,8 +650,8 @@ function exerciseCard(date, item, order) {
     ),
     media,
     h("div", { class: "notes" },
-      h("div", null, h("b", { text: "Amaç: " }), lib.purpose),
-      h("div", null, h("b", { text: "Form: " }), lib.form)
+      lib.purpose && h("div", null, h("b", { text: "Amaç: " }), lib.purpose),
+      lib.form && h("div", null, h("b", { text: "Form: " }), lib.form)
     ),
     lib.weight && h("div", { class: "last", text: last != null ? `Son: ${fmtKg(last)}` : "Son: kayıt yok" }),
     setsBox,
@@ -735,7 +699,7 @@ function renderHistory() {
         .map((e) => h("div", { class: "h-ex" },
           h("h4", { text: e.name }),
           e.sets.map((s, i) => h("div", {
-            text: `${EX[e.exId]?.weight === false || (s.weight == null) ? `Set ${i + 1}` : fmtKg(s.weight)} ${s.completed ? "✓" : "–"}`
+            text: `${s.weight == null ? `Set ${i + 1}` : fmtKg(s.weight)} ${s.completed ? "✓" : "–"}`
           }))
         ))
     );
@@ -767,17 +731,20 @@ function renderHistory() {
    ============================================================ */
 
 function weightSeries() {
-  const byEx = {}; // exId -> [{date, max}]
+  // Programdan bağımsız: kayıtta kg girilmiş her hareket sayılır (program değişse de geçmiş korunur).
+  const byEx = {}; // exId -> { name, pts: [{date, max}] }
   const dates = Object.keys(state.docs).sort();
   for (const date of dates) {
     const perEx = {};
     for (const e of Object.values(state.docs[date].exercises)) {
-      if (!EX[e.exId]?.weight) continue;
       for (const s of e.sets) {
-        if (s.completed && s.weight != null) perEx[e.exId] = Math.max(perEx[e.exId] ?? 0, s.weight);
+        if (s.completed && s.weight != null) {
+          perEx[e.exId] = Math.max(perEx[e.exId] ?? 0, s.weight);
+          (byEx[e.exId] ||= { name: e.name, pts: [] }).name = EX[e.exId]?.name || e.name;
+        }
       }
     }
-    for (const [id, max] of Object.entries(perEx)) (byEx[id] ||= []).push({ date, max });
+    for (const [id, max] of Object.entries(perEx)) byEx[id].pts.push({ date, max });
   }
   return byEx;
 }
@@ -824,13 +791,13 @@ function renderStats() {
   const tile = (v, l) => h("div", { class: "card tile" }, h("div", { class: "v", text: String(v) }), h("div", { class: "l", text: l }));
 
   const series = weightSeries();
-  const rows = Object.entries(series)
-    .sort((a, b) => EX[a[0]].name.localeCompare(EX[b[0]].name))
-    .map(([id, pts]) => {
+  const rows = Object.values(series)
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"))
+    .map(({ name, pts }) => {
       const first = pts[0].max, lastV = pts[pts.length - 1].max, mx = Math.max(...pts.map((p) => p.max));
       return h("div", { class: "card w-row" },
         h("div", { class: "w-txt" },
-          h("div", { class: "w-name", text: EX[id].name }),
+          h("div", { class: "w-name", text: name }),
           h("div", { class: "w-range", text: `${first} kg → ${lastV} kg` }),
           h("div", { class: "w-max", text: `Maks: ${mx} kg` })
         ),
@@ -1046,7 +1013,10 @@ async function onSignedIn(user) {
   renderTabs();
   showView("program");
 
+  state.programState = "loading";
+  PROGRAM = null; EX = {}; PLAN = [];
   await loadHistory();
+  await loadProgram();
   restorePending();
   renderTabs();
   renderCurrent();
@@ -1056,6 +1026,8 @@ async function onSignedIn(user) {
 
 function onSignedOut() {
   state.uid = null;
+  PROGRAM = null; EX = {}; PLAN = [];
+  state.programState = "loading";
   state.docs = {};
   Object.values(debounceTimers).forEach(clearTimeout);
   timerReset();
@@ -1111,6 +1083,7 @@ function initLifecycle() {
     if (!state.uid) return;
     pendingDates().forEach((date) => saveNow(date));
     if (!state.historyLoaded) loadHistory().then(renderCurrent);
+    if (state.programState !== "ready") loadProgram().then(renderCurrent);
   });
   window.addEventListener("offline", refreshConnectionUi);
   // Uygulama arka plandan dönerken gün değiştiyse yeniden bugüne git.

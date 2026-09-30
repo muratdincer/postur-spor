@@ -47,20 +47,15 @@
     </header>
 
     <main class="content">
-      <aside class="safety" role="note">
-        <strong>Güvenlik notu:</strong>
-        [kaldırıldı]
+      <aside id="safetyNote" class="safety" role="note" hidden>
+        <strong>Güvenlik notu:</strong> <span id="safetyText"></span>
       </aside>
 
       <section id="viewProgram" class="view">
         <div id="dayPanel" role="tabpanel"></div>
-        <details class="card progression">
-          <summary>İlk 8 hafta ilerleme</summary>
-          <ul>
-            <li><strong>1–2. hafta:</strong> 2 set, RIR yaklaşık 4. Amaç form öğrenmek.</li>
-            <li><strong>3–4. hafta:</strong> İyi tolere edilen ana hareketlerde 2 set → 3 set.</li>
-            <li><strong>5–8. hafta:</strong> 3 × 8–12. 12 + 12 + 12 düzgün tamamlanıyor ve 2–3 tekrar yedek kalıyorsa makinede bir sonraki küçük ağırlık artışı yapılabilir.</li>
-          </ul>
+        <details id="progression" class="card progression" hidden>
+          <summary id="progressionTitle"></summary>
+          <ul id="progressionList"></ul>
         </details>
       </section>
 

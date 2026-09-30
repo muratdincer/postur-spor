@@ -8,6 +8,7 @@ public/index.html          arayüz iskeleti
 public/styles.css          stiller
 public/app.js              program, set takibi, timer, geçmiş, istatistik, Firebase
 public/firebase-config.js  ← firebaseConfig BURAYA yapıştırılır
+public/programs/           program şablonları + kullanıcı atamaları
 firebase.json              Hosting + Firestore rules ayarı
 firestore.rules            kullanıcı yalnızca kendi verisine erişir
 ```
@@ -53,6 +54,18 @@ firebase deploy --only hosting,firestore:rules
 - Açılışta son 90 günün kayıtları **tek sorguda** okunur; geçmiş, istatistik ve "Son: X kg" bu önbellekten hesaplanır (gereksiz okuma yok). Toplam antrenman sayısı tek aggregate sorgusudur.
 - Ağırlık yazımları 800 ms debounce'lu, ✓ değişiklikleri anında kaydedilir.
 - Offline: Firestore kalıcı önbellek + her değişiklik `localStorage`'a (`postur-pending-*`) yazılır; bağlantı gelince senkronlanır. Üstte "Kaydediliyor... / Kaydedildi ✓ / Çevrimdışı" gösterilir.
+
+## Kişiye özel program
+
+Her kullanıcının programı Firestore'da `users/{uid}/settings/program` dokümanında durur ve uygulama programı oradan okur.
+
+- Şablonlar: `public/programs/<şablon-id>.json` (hareket kütüphanesi `exercises` + 7 günlük `days`, güvenlik notu, ilerleme notları).
+- Atama: `public/programs/assignments.json` → `"users": { "<UID>": "<şablon-id>" }`.
+- Yeni kullanıcı ilk girişte programı yoksa "Program atanmadı" ekranında kendi **UID**'sini görür. Bu UID ile şablon atanıp deploy edilince, bir sonraki açılışta şablon kullanıcının Firestore kaydına yazılır.
+- Şablonda `version` artırılıp deploy edilirse, o şablona atanmış kullanıcıların Firestore'daki programı güncellenir.
+- `existingUsersDefault`: bu özellikten önce kayıt tutmuş (programı olmayan) kullanıcıya otomatik verilen şablon.
+- Geçmiş ve istatistik programdan bağımsızdır; program değişse de eski kayıtlar görünür.
+- Kullanıcı UID'si ayrıca Firebase Console → Authentication → Users listesinde görünür.
 
 ## Eski localStorage migration
 

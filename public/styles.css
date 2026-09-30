@@ -255,3 +255,9 @@ h1, h2, h3, p { margin: 0; }
 @media (min-width: 700px) {
   .day-tabs { justify-content: center; }
 }
+
+.no-program { display: grid; gap: 10px; }
+.uid {
+  display: block; padding: 10px 12px; border-radius: 10px; background: #f2f4f7;
+  font: 14px/1.4 ui-monospace, Menlo, monospace; word-break: break-all; user-select: all; -webkit-user-select: all;
+}
