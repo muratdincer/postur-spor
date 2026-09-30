@@ -1,0 +1,21 @@
+name: Veri şifreleme anahtarı
+
+# Servis hesabının PUBLIC key'ini yazdırır (gizli değildir). programs/*.enc.json dosyaları bu anahtarla
+# şifrelenir (scripts/seal.mjs); deploy workflow'u servis hesabının private key'iyle çözüp Firestore'a yazar.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pubkey:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Public key
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node -e 'const c=require("crypto");const k=JSON.parse(process.env.SA).private_key;
+            const pem=c.createPublicKey(k).export({type:"spki",format:"pem"});
+            console.log(Buffer.from(pem).toString("base64"))'
