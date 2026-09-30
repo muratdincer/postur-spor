@@ -18,8 +18,8 @@ const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartes
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 // Program kullanıcıya özeldir ve Firestore'da users/{uid}/settings/program dokümanında durur.
-// Şablonlar Firestore templates/{id}, kullanıcı → şablon eşlemesi config/assignments (repo: programs/*.json,
-// deploy workflow'u yazar; Hosting'de yoktur, yalnızca giriş yapmış kullanıcı okuyabilir).
+// Şablonlar Firestore templates/{id} (kişisel sağlık bilgisi içerir, repoda tutulmaz), kullanıcı → şablon eşlemesi
+// config/assignments (repo: programs/assignments.json, deploy workflow'u yazar). Yalnızca atanmış kullanıcı şablonu okur.
 // EX: hareket kütüphanesi (weight: true → kg alanı, video: YouTube ID, alt: salon↔ev karşılığı),
 // PLAN: Pazartesi..Pazar 7 gün; her günün salon programı kendisi, ev alternatifi `home` alanıdır.
 let PROGRAM = null;

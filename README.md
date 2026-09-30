@@ -8,7 +8,7 @@ public/index.html          arayüz iskeleti
 public/styles.css          stiller
 public/app.js              program, set takibi, timer, geçmiş, istatistik, Firebase
 public/firebase-config.js  ← firebaseConfig BURAYA yapıştırılır
-programs/                  program şablonları + kullanıcı atamaları (Hosting'e çıkmaz, Firestore'a yazılır)
+programs/                  kullanıcı → şablon atamaları (şablonların kendisi repoda değil, Firestore'da)
 scripts/publish-programs.mjs  programs/ → Firestore (deploy workflow'u çalıştırır)
 firebase.json              Hosting + Firestore rules ayarı
 firestore.rules            kullanıcı yalnızca kendi verisine ve kendisine atanmış şablona erişir
@@ -70,7 +70,7 @@ Bir kerelik kurulum:
 
 Her kullanıcının programı Firestore'da `users/{uid}/settings/program` dokümanında durur ve uygulama programı oradan okur.
 
-- Şablonlar: `programs/<şablon-id>.json` (hareket kütüphanesi `exercises` + 7 günlük `days`, güvenlik notu, ilerleme notları). Kişisel sağlık notu içerdikleri için Hosting'e konmaz; deploy workflow'u `programs/` değişince `scripts/publish-programs.mjs` ile Firestore `templates/<şablon-id>` dokümanına yazar.
+- Şablonlar: Firestore `templates/<şablon-id>` (hareket kütüphanesi `exercises` + 7 günlük `days`, güvenlik notu, ilerleme notları). Kişisel sağlık bilgisi içerdikleri için repo public olduğundan **repoda ve Hosting'de tutulmaz**; kaynak Firestore'daki dokümandır (Firebase Console → Firestore → `templates`). Gerekirse `programs/<şablon-id>.json` geçici olarak eklenip push edilince `scripts/publish-programs.mjs` onu Firestore'a yazar; sonra dosya repodan silinmelidir (git geçmişinde kalır, bu yüzden tercihen Console'dan düzenle).
 - Atama: `programs/assignments.json` → `"users": { "<UID>": "<şablon-id>" }` (Firestore `config/assignments`). Şablonu yalnızca burada ona atanmış kullanıcı okuyabilir; atama yoksa kullanıcı Firestore'daki mevcut programıyla devam eder ama şablon güncellemesi almaz.
 - Yeni kullanıcı ilk girişte programı yoksa "Program atanmadı" ekranında kendi **UID**'sini görür. Bu UID ile şablon atanıp deploy edilince, bir sonraki açılışta şablon kullanıcının Firestore kaydına yazılır.
 - Şablonda `version` artırılıp deploy edilirse, o şablona atanmış (ya da `assignments.json`'da ataması olmayıp Firestore'daki programı aynı şablon `id`'sini taşıyan) kullanıcıların programı güncellenir.
