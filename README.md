@@ -1,0 +1,59 @@
+# Postür & Spor
+
+Mobil odaklı, tek kullanıcılı spor/postür takip uygulaması. Vanilla HTML/CSS/JS, build yok.
+Firebase Authentication (e-posta/şifre) + Cloud Firestore + Firebase Hosting.
+
+```
+public/index.html          arayüz iskeleti
+public/styles.css          stiller
+public/app.js              program, set takibi, timer, geçmiş, istatistik, Firebase
+public/firebase-config.js  ← firebaseConfig BURAYA yapıştırılır
+firebase.json              Hosting + Firestore rules ayarı
+firestore.rules            kullanıcı yalnızca kendi verisine erişir
+```
+
+## 1) Firebase Console'da yapılacaklar (elle)
+
+1. https://console.firebase.google.com → proje oluştur (Spark/ücretsiz plan yeterli).
+2. **Proje ayarları (dişli) → Genel → Uygulamalarınız → Web (`</>`)** → uygulama ekle (Hosting kurmak şart değil). Çıkan `firebaseConfig` değerlerini **`public/firebase-config.js`** dosyasına yapıştır.
+3. **Build → Authentication → Sign-in method → E-posta/Şifre** → etkinleştir.
+4. **Authentication → Users → Add user** → kendi e-posta ve şifreni oluştur (uygulamada herkese açık kayıt yok).
+5. **Build → Firestore Database → Create database** (production mode, sana yakın bölge).
+6. **Build → Hosting → Get started** (bir kez; site oluşur).
+
+## 2) Cloud Shell ile deploy (bilgisayara bir şey kurmadan)
+
+1. Firebase Console'a gir, sağ üstten (veya https://shell.cloud.google.com) **Cloud Shell**'i aç.
+2. Bu klasörü Cloud Shell'e al. Ya `git clone <repo-url>` ya da Cloud Shell'in üç nokta menüsünden **Upload** ile dosyaları yükle (`public/`, `firebase.json`, `firestore.rules`).
+3. Klasöre gir: `cd postur-spor`
+4. Cloud Shell'de Firebase CLI hazır gelir. Gerekirse: `firebase login --no-localhost`
+5. Projeyi seç: `firebase use --add` (listeden projeyi seç, alias: `default`)
+6. Deploy:
+
+```bash
+firebase deploy --only hosting,firestore:rules
+```
+
+Çıktıdaki `Hosting URL` (https://PROJE.web.app) adresini iPhone'da aç.
+
+**Firebase Studio alternatifi:** https://studio.firebase.google.com → yeni workspace → dosyaları yükle/import et → terminalde `firebase use --add` ve aynı deploy komutu.
+
+> Uygulamayı `file://` ile açma; Auth, Firestore ve YouTube gömme Hosting üzerinden (HTTPS) test edilmelidir.
+
+## Veri modeli
+
+`users/{uid}/workouts/{YYYY-MM-DD}` — her gün ayrı doküman (yerel saat dilimine göre tarih):
+
+```
+{ date, day, completedSets, updatedAt,
+  exercises: { chestSupportedRow…: { exId, name, order, sets: [{completed, weight}] } } }
+```
+
+- Yazma `merge` ile yapılır; yalnızca o günün dokümanı güncellenir, geçmiş günlere dokunulmaz.
+- Açılışta son 90 günün kayıtları **tek sorguda** okunur; geçmiş, istatistik ve "Son: X kg" bu önbellekten hesaplanır (gereksiz okuma yok). Toplam antrenman sayısı tek aggregate sorgusudur.
+- Ağırlık yazımları 800 ms debounce'lu, ✓ değişiklikleri anında kaydedilir.
+- Offline: Firestore kalıcı önbellek + her değişiklik `localStorage`'a (`postur-pending-*`) yazılır; bağlantı gelince senkronlanır. Üstte "Kaydediliyor... / Kaydedildi ✓ / Çevrimdışı" gösterilir.
+
+## Eski localStorage migration
+
+İlk girişte `postur-check-*` / `postur-v3-*` kayıtları (v4 dosyasındaki format) bulunursa, **bugünün gününe** ait olanlar bugünün Firestore kaydına gerçek set/kg olarak taşınır (bugünde zaten veri varsa ezilmez); tüm ham anahtarlar ayrıca `legacyLocal` alanında saklanır. Sonra `postur-firebase-migrated = true` konur ve tekrar çalışmaz. Not: eski uygulama tarih tutmadığı için diğer günlerin kayıtları yalnızca ham olarak saklanır. Migration, eski dosyanın açıldığı **aynı tarayıcı/adreste** (aynı origin) çalışır; `file://` ile Hosting adresinin localStorage'ı ayrıdır.

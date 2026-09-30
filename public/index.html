@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2f2f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Postür & Spor">
+  <title>Postür &amp; Spor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div id="splash" class="splash">Yükleniyor…</div>
+
+  <!-- GİRİŞ -->
+  <main id="loginScreen" class="login" hidden>
+    <form id="loginForm" class="card login-card" novalidate>
+      <h1>Postür &amp; Spor</h1>
+      <p class="muted">Devam etmek için giriş yapın.</p>
+      <label class="field">
+        <span>E-posta</span>
+        <input id="loginEmail" type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="off" autocorrect="off" required>
+      </label>
+      <label class="field">
+        <span>Şifre</span>
+        <input id="loginPassword" type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <p id="loginError" class="form-error" role="alert" hidden></p>
+      <button id="loginSubmit" class="btn btn-primary btn-block" type="submit">Giriş Yap</button>
+    </form>
+  </main>
+
+  <!-- UYGULAMA -->
+  <div id="appShell" hidden>
+    <header class="topbar">
+      <div class="topbar-row">
+        <h1 class="app-title">Postür &amp; Spor</h1>
+        <span id="saveStatus" class="save-status" data-state="idle" aria-live="polite"></span>
+        <button id="logoutBtn" class="btn btn-ghost" type="button">Çıkış</button>
+      </div>
+      <div id="offlineBanner" class="offline-banner" role="status" hidden>
+        Bağlantı yok, değişiklikler geçici olarak cihazda tutuluyor.
+      </div>
+      <nav id="dayTabs" class="day-tabs" role="tablist" aria-label="Haftanın günleri"></nav>
+    </header>
+
+    <main class="content">
+      <aside class="safety" role="note">
+        <strong>Güvenlik notu:</strong>
+        [kaldırıldı]
+      </aside>
+
+      <section id="viewProgram" class="view">
+        <div id="dayPanel" role="tabpanel"></div>
+        <details class="card progression">
+          <summary>İlk 8 hafta ilerleme</summary>
+          <ul>
+            <li><strong>1–2. hafta:</strong> 2 set, RIR yaklaşık 4. Amaç form öğrenmek.</li>
+            <li><strong>3–4. hafta:</strong> İyi tolere edilen ana hareketlerde 2 set → 3 set.</li>
+            <li><strong>5–8. hafta:</strong> 3 × 8–12. 12 + 12 + 12 düzgün tamamlanıyor ve 2–3 tekrar yedek kalıyorsa makinede bir sonraki küçük ağırlık artışı yapılabilir.</li>
+          </ul>
+        </details>
+      </section>
+
+      <section id="viewHistory" class="view" hidden></section>
+      <section id="viewStats" class="view" hidden></section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Ana gezinme">
+      <button type="button" class="nav-btn is-active" data-view="program">PROGRAM</button>
+      <button type="button" class="nav-btn" data-view="history">GEÇMİŞ</button>
+      <button type="button" class="nav-btn" data-view="stats">İSTATİSTİK</button>
+    </nav>
+
+    <!-- DİNLENME SAYACI -->
+    <section id="timer" class="timer" aria-label="Dinlenme sayacı" hidden>
+      <div class="timer-top">
+        <output id="timerDisplay" class="timer-display" aria-live="off">01:30</output>
+        <div class="presets" role="group" aria-label="Süre">
+          <button type="button" class="chip" data-preset="60">60 sn</button>
+          <button type="button" class="chip" data-preset="90" aria-pressed="true">90 sn</button>
+          <button type="button" class="chip" data-preset="120">120 sn</button>
+        </div>
+      </div>
+      <div class="timer-actions">
+        <button id="timerToggle" type="button" class="btn btn-primary">Başlat</button>
+        <button id="timerReset" type="button" class="btn">Sıfırla</button>
+        <button id="timerClose" type="button" class="btn btn-ghost">Kapat</button>
+      </div>
+      <label class="check-row">
+        <input id="autoTimer" type="checkbox">
+        <span>Bir set tamamlandığında 90 sn dinlenmeyi otomatik başlat</span>
+      </label>
+    </section>
+    <button id="timerFab" type="button" class="timer-fab" aria-label="Dinlenme sayacını aç">⏱</button>
+
+    <!-- VİDEO MODALI -->
+    <div id="videoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="videoTitle" hidden>
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h2 id="videoTitle"></h2>
+          <button id="videoClose" type="button" class="btn btn-ghost" aria-label="Kapat">Kapat ✕</button>
+        </div>
+        <div id="videoFrame" class="video-frame"></div>
+        <a id="videoLink" class="btn btn-block" target="_blank" rel="noopener noreferrer">YouTube'da aç ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
