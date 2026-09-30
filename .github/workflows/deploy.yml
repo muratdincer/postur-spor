@@ -1,0 +1,42 @@
+name: Firebase deploy
+
+# main'e gelen her değişiklikte Hosting + Firestore kurallarını yayınlar.
+# Gerekli secret: FIREBASE_SERVICE_ACCOUNT (servis hesabı JSON anahtarının tamamı).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "public/**"
+      - "firebase.json"
+      - "firestore.rules"
+      - ".firebaserc"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Program şablonlarını doğrula
+        run: for f in public/programs/*.json; do jq empty "$f" || exit 1; done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy
+        run: npx --yes firebase-tools@13 deploy --only hosting,firestore:rules --project postur-spor --non-interactive
