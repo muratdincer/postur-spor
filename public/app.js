@@ -19,7 +19,8 @@ const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz"
 
 // Program kullanıcıya özeldir ve Firestore'da users/{uid}/settings/program dokümanında durur.
 // Şablonlar public/programs/*.json, kullanıcı → şablon eşlemesi public/programs/assignments.json.
-// EX: hareket kütüphanesi (weight: true → kg alanı, video: YouTube ID), PLAN: Pazartesi..Pazar 7 gün.
+// EX: hareket kütüphanesi (weight: true → kg alanı, video: YouTube ID, alt: salon↔ev karşılığı),
+// PLAN: Pazartesi..Pazar 7 gün; her günün salon programı kendisi, ev alternatifi `home` alanıdır.
 let PROGRAM = null;
 let EX = {};
 let PLAN = [];
@@ -107,7 +108,8 @@ const state = {
   totalDirty: true,
   historyShown: 30,
   openHistory: new Set(),
-  programState: "loading" // loading | ready | missing
+  programState: "loading", // loading | ready | missing
+  mode: lsGet("postur-mode") === "home" ? "home" : "gym" // SALON / EVDE, gün seçiminden bağımsız
 };
 
 const debounceTimers = {};
@@ -308,10 +310,14 @@ const programRef = () => doc(db, "users", state.uid, "settings", "program");
 const programCacheKey = () => `postur-program-${state.uid}`;
 const PROGRAM_FIELDS = ["id", "version", "name", "safetyNote", "progression", "exercises", "days"];
 
+function validDay(d) {
+  return d && (d.rest || (Array.isArray(d.items) && d.items.every((it) =>
+    it && typeof it.ex === "string" && typeof it.key === "string" && Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10)));
+}
+
 function validProgram(p) {
   if (!p || typeof p !== "object" || typeof p.exercises !== "object" || !Array.isArray(p.days) || p.days.length !== 7) return false;
-  return p.days.every((d) => d && (d.rest || (Array.isArray(d.items) && d.items.every((it) =>
-    it && typeof it.ex === "string" && typeof it.key === "string" && Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10))));
+  return p.days.every((d) => validDay(d) && (d.home == null || validDay(d.home)));
 }
 
 // Yalnızca program alanlarını al (Firestore Timestamp vb. dışarıda kalsın).
@@ -383,6 +389,8 @@ async function loadProgram() {
   } catch (err) {
     console.warn("Program ataması okunamadı:", err);
   }
+  // Açık atama yoksa kullanıcının mevcut şablonu kalır; şablonun yeni sürümü varsa güncellenir.
+  if (!assignedId && storedOk && typeof stored?.id === "string") assignedId = stored.id;
 
   if (assignedId && storedOk && /^[a-z0-9-]+$/i.test(assignedId)) {
     try {
@@ -531,6 +539,23 @@ function selectDay(i) {
   loadSingleDay(weekDates()[i]);
 }
 
+function setMode(mode) {
+  if (state.mode === mode) return;
+  state.mode = mode;
+  lsSet("postur-mode", mode);
+  renderProgram();
+}
+
+// iOS tarzı SALON | EVDE seçici.
+function modeSwitch() {
+  const opt = (mode, label) => h("button", {
+    type: "button", role: "radio", class: "seg-btn", "aria-checked": String(state.mode === mode),
+    text: label, onclick: () => setMode(mode)
+  });
+  return h("div", { class: "segmented", role: "radiogroup", "aria-label": "Antrenman yeri" },
+    opt("gym", "SALON"), opt("home", "EVDE"));
+}
+
 function renderProgram() {
   const idx = state.selectedIdx;
   const date = weekDates()[idx];
@@ -540,10 +565,15 @@ function renderProgram() {
       : h("div", { class: "card empty", text: "Program yükleniyor…" }));
     return;
   }
-  const plan = PLAN[idx];
+  const hasHome = Boolean(PLAN[idx].home);
+  const mode = hasHome ? state.mode : "gym";
+  const plan = mode === "home" ? PLAN[idx].home : PLAN[idx];
+  const todayIdx = dayIndex(new Date());
 
   const head = h("div", { class: "card day-head" },
     h("h2", { text: DAYS[idx] }),
+    idx === todayIdx && h("div", { class: "day-badge", text: "BUGÜN" }),
+    hasHome && modeSwitch(),
     h("div", { class: "sub", text: `${longDate(date)} · ${plan.title}` }),
     plan.note && h("div", { class: "sub", text: plan.note })
   );
@@ -557,12 +587,15 @@ function renderProgram() {
     panel.replaceChildren(head, h("div", { class: "empty", text: "Kayıtlar yükleniyor…" }));
     return;
   }
-  panel.replaceChildren(head, h("div", { class: "view" }, plan.items.map((item, n) => exerciseCard(date, item, n))));
+  panel.replaceChildren(head, h("div", { class: "view" }, plan.items.map((item, n) => exerciseCard(date, item, n, mode))));
 }
 
-function exerciseCard(date, item, order) {
-  const lib = EX[item.ex] || { name: item.ex, weight: false };
+function exerciseCard(date, item, order, mode = "gym") {
+  const home = mode === "home";
+  const base = EX[item.ex] || { name: item.ex, weight: false };
+  const lib = home ? { ...base, weight: false } : base; // evde kg alanı yok
   const name = item.name || lib.name;
+  const altName = lib.alt && EX[lib.alt]?.name;
   const entry = state.docs[date]?.exercises[item.key];
   const setsData = () => ensureEntry(date, item, order).sets;
   const initial = entry ? entry.sets : Array.from({ length: item.sets }, () => ({ completed: false, weight: null }));
@@ -645,6 +678,10 @@ function exerciseCard(date, item, order) {
         h("div", { class: "ex-reps" },
           item.sets > 1 ? h("b", { text: `${item.sets} × ${item.reps}` }) : h("b", { text: item.reps }),
           item.hint && ` · ${item.hint}`
+        ),
+        (altName || (home && !lib.cardio)) && h("div", { class: "ex-tags" },
+          home && !lib.cardio && h("span", { class: "tag", text: "Vücut ağırlığı" }),
+          altName && h("span", { class: "tag alt", text: `${home ? "Salon" : "Ev"} alternatifi: ${altName}` })
         )
       )
     ),

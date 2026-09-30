@@ -62,8 +62,9 @@ Her kullanıcının programı Firestore'da `users/{uid}/settings/program` doküm
 - Şablonlar: `public/programs/<şablon-id>.json` (hareket kütüphanesi `exercises` + 7 günlük `days`, güvenlik notu, ilerleme notları).
 - Atama: `public/programs/assignments.json` → `"users": { "<UID>": "<şablon-id>" }`.
 - Yeni kullanıcı ilk girişte programı yoksa "Program atanmadı" ekranında kendi **UID**'sini görür. Bu UID ile şablon atanıp deploy edilince, bir sonraki açılışta şablon kullanıcının Firestore kaydına yazılır.
-- Şablonda `version` artırılıp deploy edilirse, o şablona atanmış kullanıcıların Firestore'daki programı güncellenir.
+- Şablonda `version` artırılıp deploy edilirse, o şablona atanmış (ya da `assignments.json`'da ataması olmayıp Firestore'daki programı aynı şablon `id`'sini taşıyan) kullanıcıların programı güncellenir.
 - `existingUsersDefault`: bu özellikten önce kayıt tutmuş (programı olmayan) kullanıcıya otomatik verilen şablon.
+- **SALON / EVDE:** Her günün salon programı `days[i].items`, ekipmansız ev alternatifi `days[i].home` alanındadır. Gün başlığındaki seçici ikisi arasında geçiş yapar; seçim gün sekmesinden bağımsızdır ve `localStorage`'da (`postur-mode`) tutulur. Ev hareketlerinin anahtarları `h` önekiyle ayrıdır (`hDeadBug` gibi), bu yüzden aynı gün iki programın işaretlemeleri aynı dokümanda ayrı durur ve geçişte kaybolmaz. Evde kg alanı gösterilmez. Kütüphanedeki `alt` alanı kartta "Ev/Salon alternatifi" etiketini üretir.
 - Geçmiş ve istatistik programdan bağımsızdır; program değişse de eski kayıtlar görünür.
 - Kullanıcı UID'si ayrıca Firebase Console → Authentication → Users listesinde görünür.
 

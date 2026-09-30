@@ -261,3 +261,19 @@ h1, h2, h3, p { margin: 0; }
   display: block; padding: 10px 12px; border-radius: 10px; background: #f2f4f7;
   font: 14px/1.4 ui-monospace, Menlo, monospace; word-break: break-all; user-select: all; -webkit-user-select: all;
 }
+
+/* SALON / EVDE seçici (iOS segmented control) */
+.day-badge { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--accent); }
+.segmented {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 10px 0 6px; padding: 2px;
+  background: #e9e9ee; border-radius: 10px;
+}
+.seg-btn {
+  appearance: none; -webkit-appearance: none; min-height: 36px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 600;
+  letter-spacing: .04em; cursor: pointer; transition: background .15s, box-shadow .15s;
+}
+.seg-btn[aria-checked="true"] { background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 1px rgba(0, 0, 0, .04); }
+.ex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #f0f0f4; color: var(--muted); }
+.tag.alt { background: var(--accent-soft); color: var(--accent); }
