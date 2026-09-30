@@ -28,31 +28,39 @@ let PLAN = [];
 // Hareket videoları tek yerde: hareket kimliği → YouTube videosu. Program şablonundaki `video` alanı yalnızca
 // burada karşılığı olmayan hareketler için yedek olarak kullanılır. Yeni ID eklemeden önce oEmbed ile doğrula
 // (https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ID&format=json); uydurma ID ekleme.
-// TODO: Türkçe + erkek demonstratörlü videolara geçiş. Adaylar henüz doğrulanmadı (erişim, varyasyon, demonstratör):
-//   legPress uVwrVUXBPec (Cenk Hoca) · lat BL0Q7ipPYxw (MACFit) · legCurl -xnlcqQCBC4 (MACFit)
-//   row s3YVyKAR7r8 (MACFit, seated row, göğüs destekli mi kontrol et) · reversePec RAmzeOO5XaE (MACFit)
-//   hipThrust D040DUMZuUs · deadBug kGyhUpnw70E · birdDog VSvp8iEoLC8 (Egzersiz Rehberim - Ege Berk Büyüksu)
+// `start`: videonun başlayacağı saniye (popup embed'i ve "YouTube'da aç" linki bu saniyeden açılır).
+// TODO: snowAngel için seçilen UxAEslAUt2A (Kıvanç Kökten, start: 48) 2026-09-30'da private; açılınca ekle.
 const exerciseVideos = {
-  chinTuck: { id: "h_1-7H0eOfo", title: "Chin tuck / chin nod", channel: null, language: null },
-  row: { id: "FU6YQawma2Q", title: "Chest-supported row", channel: null, language: null },
-  lat: { id: "Btoos8xwhkk", title: "Neutral-grip lat pulldown", channel: null, language: null },
-  reversePec: { id: "qdYLu49hg1c", title: "Reverse pec deck", channel: null, language: null },
-  legPress: { id: "cDGOn-yfKJA", title: "Leg press", channel: null, language: null },
-  legCurl: { id: "_2Kd0d-JEUM", title: "Seated leg curl", channel: null, language: null },
-  hipThrust: { id: "dkf8iq4sh8k", title: "Hip thrust", channel: null, language: null },
+  chinTuck: { id: "0tWxFbOHvRo", title: "Boyun düzleşmesinde kullanılan Chin Tuck egzersizi", channel: "Fizyoterapist Oğuz Özdemir", language: "tr" },
+  row: { id: "u3Yg9h0WZRY", title: "Dumbbell Incline Row Nasıl Yapılır", channel: "Gel Gel Hoca", language: "tr" },
+  lat: { id: "QDsllbOkwEs", title: "V-Bar Lat Pulldown Nasıl Yapılır", channel: "Gel Gel Hoca", language: "tr" },
+  reversePec: { id: "iklaLgWUgMs", title: "Machine Reverse Fly Nasıl Yapılır", channel: "MACFit", language: "tr" },
+  legPress: { id: "uVwrVUXBPec", title: "Leg Press Nasıl Yapılır", channel: "Cenk Hoca", language: "tr" },
+  legCurl: { id: "-xnlcqQCBC4", title: "Machine Seated Leg Curl Nasıl Yapılır", channel: "MACFit", language: "tr" },
+  hipThrust: { id: "D040DUMZuUs", title: "Hip Thrust Egzersizi Nasıl Yapılır? | Adım Adım Doğru Teknik", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
   pallof: { id: "_2xWmYNnFS8", title: "Pallof press", channel: null, language: null },
   openBook: { id: "OW6YHlxY6JI", title: "Open book", channel: null, language: null },
   thoracic: { id: "9Y11Kc0E0og", title: "Foam roller thoracic extension", channel: null, language: null },
   pecStretch: { id: "M850sCj9LHQ", title: "Doorway pec stretch", channel: null, language: null },
   hipFlexor: { id: "qWMXPKLFF2A", title: "Half-kneeling hip-flexor stretch", channel: null, language: null },
-  deadBug: { id: "bxn9FBrt4-A", title: "Dead bug", channel: null, language: null },
-  birdDog: { id: "ZdAHe9_HeEw", title: "Bird dog", channel: null, language: null },
-  chestPress: { id: "lRo9zZ7EwpM", title: "Machine chest press", channel: null, language: null },
+  deadBug: { id: "kGyhUpnw70E", title: "Dead Bug Egzersizi Nasıl Yapılır? (Core Bölgeni Güçlendir)", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
+  birdDog: { id: "VSvp8iEoLC8", title: "Bird Dog Egzersizi Nasıl Yapılır? (Core Stabilizasyonu & Bel Sağlığı)", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
+  chestPress: { id: "2wFMkurVmrQ", title: "Machine Chest Press Nasıl Yapılır?", channel: "MACFit", language: "tr" },
   extRot: { id: "LpNgc6Vx4iY", title: "Cable external rotation", channel: null, language: null },
-  sidePlank: { id: "lvpPNjRQONQ", title: "Side plank (dizler yerde)", channel: null, language: null }
+  sidePlank: { id: "lvpPNjRQONQ", title: "Side plank (dizler yerde)", channel: null, language: null },
+  // Ev hareketleri
+  wallSlide: { id: "Zz7-2Ya3iu8", title: "Wall Slide Egzersizi – Omuz ve Gövde Mobilizasyonu", channel: "Fizyoterapi Rehberi / Onur Kırcaoğlu", language: "tr" },
+  heelDigBridge: { id: "mUjc48MBKRk", title: "Hip-Hamstring Bridge Nasıl Yapılır? | Kalça ve Arka Bacak Güçlendirme", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
+  gluteBridge: { id: "R73ClX1LpAI", title: "Glute Bridge / Hamstring Bridge doğru form", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
+  wallPushUp: { id: "p9JDV4YxSBw", title: "Wall Push Up Nasıl Yapılır?", channel: "hegesports", language: "tr" }
 };
 
-const videoFor = (exId) => exerciseVideos[exId]?.id || EX[exId]?.video || null;
+// Merkezi mapping önce, şablondaki `video` yedek. { id, start, title } döner; video yoksa null.
+function videoFor(exId) {
+  const v = exerciseVideos[exId];
+  if (v?.id) return { id: v.id, start: v.start || 0, title: v.language === "tr" ? v.title : null };
+  return EX[exId]?.video ? { id: EX[exId].video, start: 0, title: null } : null;
+}
 
 /* ============================================================
    YARDIMCILAR
@@ -102,7 +110,7 @@ function parseWeight(str) {
 }
 const fmtKg = (w) => `${String(w).replace(".", ",")} kg`;
 
-const ytWatch = (id) => `https://www.youtube.com/watch?v=${id}`;
+const ytWatch = (id, start = 0) => `https://www.youtube.com/watch?v=${id}${start > 0 ? `&t=${start}s` : ""}`;
 const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
 
@@ -734,12 +742,12 @@ function exerciseCard(date, item, order, mode = "gym") {
     saveNow(date);
   };
 
-  const videoTitle = name;
+  const videoTitle = video?.title || name;
   const media = video
     ? h("button", {
         type: "button", class: "thumb", "aria-label": `${name} videosunu aç`,
-        onclick: (ev) => openVideo(video, videoTitle, ev.currentTarget)
-      }, thumbImg(video, name), h("span", { class: "play", "aria-hidden": "true", text: "▶" }))
+        onclick: (ev) => openVideo(video.id, videoTitle, ev.currentTarget, video.start)
+      }, thumbImg(video.id, name), h("span", { class: "play", "aria-hidden": "true", text: "▶" }))
     : h("div", { class: "thumb static" }, h("img", { src: placeholderImg(name), alt: name, loading: "lazy" }));
 
   return h("article", { class: "card ex" },
@@ -769,7 +777,7 @@ function exerciseCard(date, item, order, mode = "gym") {
       h("button", { type: "button", class: "btn small", "aria-label": "Set ekle", text: "+", onclick: () => changeSets(1) }),
       h("button", { type: "button", class: "btn", text: "⏱ Dinlenme", onclick: () => timerStart() }),
       video
-        ? h("a", { class: "btn", href: ytWatch(video), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da aç ↗" })
+        ? h("a", { class: "btn", href: ytWatch(video.id, video.start), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da aç ↗" })
         : h("a", { class: "btn", href: ytSearch(lib.search || name), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da ara ↗" })
     )
   );
@@ -1050,12 +1058,12 @@ function initTimer() {
 
 let modalReturnFocus = null;
 
-function openVideo(id, title, trigger) {
+function openVideo(id, title, trigger, start = 0) {
   modalReturnFocus = trigger || null;
   $("videoTitle").textContent = title;
-  $("videoLink").href = ytWatch(id);
+  $("videoLink").href = ytWatch(id, start);
   const iframe = h("iframe", {
-    src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?playsinline=1&rel=0&autoplay=1&mute=1`,
+    src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?playsinline=1&rel=0&autoplay=1&mute=1${start > 0 ? `&start=${start}` : ""}`,
     title, allow: "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture",
     allowfullscreen: true, referrerpolicy: "strict-origin-when-cross-origin"
   });
