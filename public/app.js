@@ -1071,10 +1071,26 @@ function openVideo(id, title, trigger, start = 0) {
   $("videoModal").hidden = false;
   document.body.classList.add("modal-open");
   $("videoClose").focus();
+  enterFullscreen($("videoModal"));
+}
+
+// Destekleyen tarayıcılarda (Android, iPad, masaüstü) gerçek tam ekran; iPhone'da CSS ile tüm görünüm kaplanır.
+// Tıklama anında çağrılmalı (kullanıcı hareketi gerekir).
+function enterFullscreen(el) {
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  Promise.resolve(req.call(el)).then(() => screen.orientation?.lock?.("landscape")).catch(() => { /* desteklenmiyor */ });
+}
+
+function exitFullscreen() {
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!fsEl) return;
+  (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
 }
 
 function closeVideo() {
   $("videoFrame").replaceChildren(); // iframe'i kaldır (video durur)
+  exitFullscreen();
   $("videoModal").hidden = true;
   document.body.classList.remove("modal-open");
   if (modalReturnFocus && modalReturnFocus.focus) modalReturnFocus.focus();
