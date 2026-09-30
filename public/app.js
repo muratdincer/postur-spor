@@ -29,7 +29,6 @@ let PLAN = [];
 // burada karşılığı olmayan hareketler için yedek olarak kullanılır. Yeni ID eklemeden önce oEmbed ile doğrula
 // (https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ID&format=json); uydurma ID ekleme.
 // `start`: videonun başlayacağı saniye (popup embed'i ve "YouTube'da aç" linki bu saniyeden açılır).
-// TODO: snowAngel için seçilen UxAEslAUt2A (Kıvanç Kökten, start: 48) 2026-09-30'da private; açılınca ekle.
 const exerciseVideos = {
   chinTuck: { id: "0tWxFbOHvRo", title: "Boyun düzleşmesinde kullanılan Chin Tuck egzersizi", channel: "Fizyoterapist Oğuz Özdemir", language: "tr" },
   row: { id: "u3Yg9h0WZRY", title: "Dumbbell Incline Row Nasıl Yapılır", channel: "Gel Gel Hoca", language: "tr" },
@@ -49,6 +48,7 @@ const exerciseVideos = {
   extRot: { id: "LpNgc6Vx4iY", title: "Cable external rotation", channel: null, language: null },
   sidePlank: { id: "lvpPNjRQONQ", title: "Side plank (dizler yerde)", channel: null, language: null },
   // Ev hareketleri
+  snowAngel: { id: "KEF6yQ8b4F8", title: "Reverse Snow Angel Nasıl Yapılır?", channel: "MACFit", language: "tr" },
   wallSlide: { id: "Zz7-2Ya3iu8", title: "Wall Slide Egzersizi – Omuz ve Gövde Mobilizasyonu", channel: "Fizyoterapi Rehberi / Onur Kırcaoğlu", language: "tr" },
   heelDigBridge: { id: "mUjc48MBKRk", title: "Hip-Hamstring Bridge Nasıl Yapılır? | Kalça ve Arka Bacak Güçlendirme", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
   gluteBridge: { id: "R73ClX1LpAI", title: "Glute Bridge / Hamstring Bridge doğru form", channel: "Egzersiz Rehberim - Ege Berk BÜYÜKSU", language: "tr" },
