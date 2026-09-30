@@ -2,6 +2,7 @@ name: Firebase deploy
 
 # main'e gelen her değişiklikte Hosting + Firestore kurallarını yayınlar.
 # Gerekli secret: FIREBASE_SERVICE_ACCOUNT (servis hesabı JSON anahtarının tamamı).
+# Hosting her seferinde, Firestore kuralları yalnızca firestore.rules değiştiğinde yayınlanır.
 on:
   push:
     branches: [main]
@@ -26,6 +27,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Program şablonlarını doğrula
         run: for f in public/programs/*.json; do jq empty "$f" || exit 1; done
@@ -38,5 +41,21 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy
-        run: npx --yes firebase-tools@13 deploy --only hosting,firestore:rules --project postur-spor --non-interactive
+      - name: Hosting deploy
+        run: npx --yes firebase-tools@13 deploy --only hosting --project postur-spor --non-interactive
+
+      # Kurallar yalnızca firestore.rules değiştiyse (veya elle çalıştırmada) yayınlanır.
+      # Servis hesabında "Firebase Rules Admin" rolü gerekir.
+      - name: Firestore kuralları değişti mi?
+        id: rules
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null \
+             || ! git diff --quiet "$BEFORE" HEAD -- firestore.rules; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Firestore kuralları deploy
+        if: steps.rules.outputs.changed == 'true'
+        run: npx --yes firebase-tools@13 deploy --only firestore:rules --project postur-spor --non-interactive

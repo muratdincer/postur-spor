@@ -43,12 +43,13 @@ firebase deploy --only hosting,firestore:rules
 
 ## 3) GitHub Actions ile otomatik deploy
 
-`.github/workflows/deploy.yml`, `main`'e gelen her değişiklikte (`public/`, `firebase.json`, `firestore.rules`) Hosting ve Firestore kurallarını yayınlar. Actions sekmesinden **Run workflow** ile elle de çalıştırılabilir.
+`.github/workflows/deploy.yml`, `main`'e gelen her değişiklikte (`public/`, `firebase.json`, `firestore.rules`) Hosting'i, `firestore.rules` değiştiyse kuralları da yayınlar. Actions sekmesinden **Run workflow** ile elle de çalıştırılabilir.
 
 Bir kerelik kurulum:
 1. Firebase Console → Proje ayarları → **Hizmet hesapları** → **Yeni özel anahtar oluştur** → JSON dosyası iner.
 2. GitHub → repo → Settings → Secrets and variables → Actions → **New repository secret**: ad `FIREBASE_SERVICE_ACCOUNT`, değer JSON dosyasının tamamı.
 3. JSON dosyasını bilgisayardan sil; repoya asla ekleme.
+4. Servis hesabının rolleri (Google Cloud Console → IAM): **Firebase Hosting Admin** ve **Firebase Rules Admin**. Rules Admin yoksa kural deploy'u 403 verir. Kurallar yalnızca `firestore.rules` değiştiğinde yayınlandığından Hosting deploy'u bundan etkilenmez.
 
 ## Veri modeli
 
