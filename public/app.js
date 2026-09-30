@@ -146,6 +146,7 @@ const state = {
   historyShown: 30,
   openHistory: new Set(),
   programState: "loading", // loading | ready | missing
+  initialScroll: false,     // açılışta bugünün kaldığı harekete bir kez kaydır
   mode: lsGet("postur-mode") === "home" ? "home" : "gym" // SALON / EVDE, gün seçiminden bağımsız
 };
 
@@ -561,7 +562,7 @@ function renderTabs() {
     const active = i === state.selectedIdx;
     return h("button", {
       type: "button", role: "tab", "aria-selected": String(active),
-      class: `day-tab${active ? " is-active" : ""}${i === todayIdx ? " is-today" : ""}`,
+      class: `day-tab${active ? " is-active" : ""}${i === todayIdx ? " is-today" : ""}${dayDoneAt(i) ? " is-done" : ""}`,
       onclick: () => selectDay(i)
     }, h("span", { class: "d-name", text: name }), h("span", { class: "d-rel", text: relLabel(i - todayIdx) }));
   }));
@@ -571,6 +572,7 @@ function renderTabs() {
 
 function selectDay(i) {
   state.selectedIdx = i;
+  state.initialScroll = false;
   renderTabs();
   renderProgram();
   loadSingleDay(weekDates()[i]);
@@ -607,9 +609,10 @@ function renderProgram() {
   const plan = mode === "home" ? PLAN[idx].home : PLAN[idx];
   const todayIdx = dayIndex(new Date());
 
-  const head = h("div", { class: "card day-head" },
+  const head = h("div", { id: "dayHead", class: "card day-head" },
     h("h2", { text: DAYS[idx] }),
     idx === todayIdx && h("div", { class: "day-badge", text: "BUGÜN" }),
+    h("div", { class: "day-badge done-badge", text: "TAMAMLANDI ✓" }),
     hasHome && modeSwitch(),
     h("div", { class: "sub", text: `${longDate(date)} · ${plan.title}` }),
     plan.note && h("div", { class: "sub", text: plan.note })
@@ -628,6 +631,22 @@ function renderProgram() {
     plan.items.map((item, n) => exerciseCard(date, item, n, mode)),
     h("div", { id: "dayDone", class: "card day-done", role: "status", hidden: !dayComplete(date, plan), text: "Antrenman tamamlandı ✓" })
   ));
+  head.classList.toggle("is-done", dayComplete(date, plan));
+  if (state.initialScroll && idx === todayIdx && (state.historyLoaded || state.docs[date])) {
+    state.initialScroll = false;
+    requestAnimationFrame(() => scrollToProgress(date, plan));
+  }
+}
+
+// Açılışta: son tamamlanan hareketten sonrakine, o yoksa ilk tamamlanmamışa kaydır.
+// Hiç hareket yapılmamışsa ya da gün tamamlandıysa üstte kalır.
+function scrollToProgress(date, plan) {
+  const done = plan.items.map((it) => exerciseDone(date, it));
+  const last = done.lastIndexOf(true);
+  if (last < 0 || done.every(Boolean)) return;
+  const target = last + 1 < done.length ? last + 1 : done.indexOf(false);
+  const card = $("dayPanel").querySelectorAll(".ex")[target];
+  if (card) scrollToCard(card, false);
 }
 
 function currentPlan() {
@@ -635,25 +654,37 @@ function currentPlan() {
   return day?.home && state.mode === "home" ? day.home : day;
 }
 
+function exerciseDone(date, item) {
+  const sets = state.docs[date]?.exercises[item.key]?.sets;
+  return sets?.length > 0 && sets.every((s) => s.completed);
+}
+
 function dayComplete(date, plan) {
   if (!plan || plan.rest || !plan.items?.length) return false;
-  const d = state.docs[date];
-  return plan.items.every((it) => {
-    const sets = d?.exercises[it.key]?.sets;
-    return sets?.length > 0 && sets.every((s) => s.completed);
-  });
+  return plan.items.every((it) => exerciseDone(date, it));
+}
+
+// Gün sekmesi: salon ya da ev programından biri tamamlandıysa gün bitmiş sayılır.
+function dayDoneAt(i) {
+  const day = PLAN[i];
+  if (!day) return false;
+  const date = weekDates()[i];
+  return dayComplete(date, day) || dayComplete(date, day.home);
 }
 
 function refreshDayDone(date) {
+  const complete = dayComplete(date, currentPlan());
   const el = $("dayDone");
-  if (el) el.hidden = !dayComplete(date, currentPlan());
+  if (el) el.hidden = !complete;
+  $("dayHead")?.classList.toggle("is-done", complete);
+  $("dayTabs").children[state.selectedIdx]?.classList.toggle("is-done", dayDoneAt(state.selectedIdx));
 }
 
-function scrollToCard(el) {
+function scrollToCard(el, smooth = true) {
   const header = document.querySelector(".topbar");
   el.style.scrollMarginTop = `${(header ? header.offsetHeight : 0) + 12}px`; // sticky başlık + gün sekmeleri altında kalmasın
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  el.scrollIntoView({ behavior: smooth && !reduce ? "smooth" : "auto", block: "start" });
 }
 
 // Bir hareketin tüm setleri kullanıcı tarafından tamamlandığında sonraki karta kaydırır; son hareketse gün durumunu gösterir.
@@ -740,6 +771,7 @@ function exerciseCard(date, item, order, mode = "gym") {
     e.touched = true;
     drawSets();
     saveNow(date);
+    refreshDayDone(date);
   };
 
   const videoTitle = video?.title || name;
@@ -1172,6 +1204,7 @@ async function onSignedIn(user) {
   await loadHistory();
   await loadProgram();
   restorePending();
+  state.initialScroll = true;
   renderTabs();
   renderCurrent();
   if (!state.historyLoaded) loadSingleDay(weekDates()[state.selectedIdx]);

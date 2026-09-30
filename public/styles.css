@@ -94,6 +94,10 @@ h1, h2, h3, p { margin: 0; }
 .day-tab.is-today .d-rel { color: var(--accent); }
 .day-tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .day-tab.is-active .d-rel { color: rgba(255, 255, 255, .85); }
+.day-tab.is-done { background: #e9f6ed; border-color: var(--ok); }
+.day-tab.is-done .d-name::after { content: " ✓"; color: var(--ok); }
+.day-tab.is-done.is-active { background: var(--ok); border-color: var(--ok); }
+.day-tab.is-done.is-active .d-name::after { color: #fff; }
 
 /* Content */
 .content {
@@ -109,6 +113,10 @@ h1, h2, h3, p { margin: 0; }
 .day-head { padding: 16px; }
 .day-head h2 { font-size: 22px; }
 .day-head .sub { color: var(--muted); margin-top: 2px; }
+.day-head.is-done { background: #e9f6ed; box-shadow: inset 0 0 0 2px var(--ok); }
+.day-head .done-badge { display: none; color: var(--ok); }
+.day-head .day-badge + .done-badge { margin-left: 8px; }
+.day-head.is-done .done-badge { display: inline-block; }
 .rest-list { margin: 10px 0 0; padding-left: 20px; }
 
 /* Exercise card */
