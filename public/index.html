@@ -89,6 +89,22 @@
         <span>Bir set tamamlandığında 90 sn dinlenmeyi otomatik başlat</span>
       </label>
     </section>
+    <!-- SÜRELİ HAREKET SAYACI (tam ekran) -->
+    <div id="workScreen" class="work-screen" role="dialog" aria-modal="true" aria-labelledby="workName" data-phase="prep" hidden>
+      <div class="work-info">
+        <h2 id="workName" class="work-name"></h2>
+        <div id="workSet" class="work-set"></div>
+      </div>
+      <div class="work-center">
+        <div id="workPhase" class="work-phase"></div>
+        <output id="workTime" class="work-time" aria-live="off"></output>
+        <div class="work-bar"><div id="workBar"></div></div>
+      </div>
+      <div class="work-actions">
+        <button id="workPause" type="button" class="btn">Duraklat</button>
+        <button id="workStop" type="button" class="btn btn-ghost">İptal</button>
+      </div>
+    </div>
     <button id="timerFab" type="button" class="timer-fab" aria-label="Dinlenme sayacını aç">⏱</button>
 
     <!-- VİDEO MODALI -->

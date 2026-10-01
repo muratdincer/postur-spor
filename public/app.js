@@ -742,7 +742,9 @@ function exerciseCard(date, item, order, mode = "gym") {
     };
     const workBtn = duration && h("button", {
       type: "button", class: "btn work", "aria-label": `Set ${i + 1} süre sayacı`,
-      onclick: () => workToggle(workKey, duration, workBtn, btn, markDone)
+      onclick: () => workToggle(workKey, duration, workBtn, btn, markDone, {
+        name, set: `Set ${i + 1} / ${state.docs[date]?.exercises[item.key]?.sets.length || item.sets}`
+      })
     });
     if (workBtn) workBind(workKey, duration, workBtn, btn);
     let input = null;
@@ -1129,7 +1131,10 @@ function durationOf(item) {
 }
 
 const WORK_PREP = 3; // başlamadan önce pozisyon alma süresi (sn)
-const work = { key: null, total: 0, endAt: 0, go: false, iv: null, btn: null, chk: null, done: null };
+const work = {
+  key: null, total: 0, endAt: 0, go: false, iv: null, btn: null, chk: null, done: null,
+  paused: false, leftMs: 0, lastBeep: null
+};
 
 function workIdle(btn, duration) {
   btn.textContent = `▶ ${fmtTime(duration)}`;
@@ -1137,13 +1142,26 @@ function workIdle(btn, duration) {
   btn.setAttribute("aria-pressed", "false");
 }
 
+const workLeftMs = () => Math.max(0, work.paused ? work.leftMs : work.endAt - Date.now());
+
+// Tam ekran sayaç ve set satırındaki düğme birlikte güncellenir.
 function workRender() {
+  const leftMs = workLeftMs();
+  const left = Math.ceil(leftMs / 1000);
+  const prep = left > work.total;
   const b = work.btn;
-  if (!b?.isConnected) return;
-  const left = Math.max(0, Math.ceil((work.endAt - Date.now()) / 1000));
-  b.textContent = left > work.total ? `Hazır ${left - work.total}` : `■ ${fmtTime(left)}`;
-  b.classList.add("is-running");
-  b.setAttribute("aria-pressed", "true");
+  if (b?.isConnected) {
+    b.textContent = prep ? `Hazır ${left - work.total}` : `■ ${fmtTime(left)}`;
+    b.classList.add("is-running");
+    b.setAttribute("aria-pressed", "true");
+  }
+  const screen = $("workScreen");
+  screen.dataset.phase = work.paused ? "paused" : prep ? "prep" : "work";
+  $("workPhase").textContent = work.paused ? "Duraklatıldı" : prep ? "Hazırlan" : "Çalış";
+  $("workTime").textContent = prep ? String(left - work.total) : fmtTime(left);
+  const frac = prep ? 0 : 1 - leftMs / (work.total * 1000);
+  $("workBar").style.transform = `scaleX(${Math.min(1, Math.max(0, frac))})`;
+  $("workPause").textContent = work.paused ? "Devam" : "Duraklat";
 }
 
 // Kart yeniden çizildiğinde çalışan sayaç yeni düğmeye bağlanır.
@@ -1154,31 +1172,67 @@ function workBind(key, duration, btn, chk) {
   workRender();
 }
 
-// Aynı düğmeye tekrar dokunmak sayacı iptal eder; başka bir sette başlatmak öncekini iptal eder.
-function workToggle(key, duration, btn, chk, done) {
+// Set düğmesi tam ekran sayacı açar; çalışırken aynı düğmeye dokunmak iptal eder.
+function workToggle(key, duration, btn, chk, done, info) {
   const same = work.key === key;
   workCancel();
   if (same) return;
   audioUnlock();
-  Object.assign(work, { key, total: duration, btn, chk, done, go: false, endAt: Date.now() + (WORK_PREP + duration) * 1000 });
+  Object.assign(work, {
+    key, total: duration, btn, chk, done, go: false, paused: false, lastBeep: null,
+    endAt: Date.now() + (WORK_PREP + duration) * 1000
+  });
+  $("workName").textContent = info.name;
+  $("workSet").textContent = info.set;
+  $("workScreen").hidden = false;
+  document.body.classList.add("modal-open");
+  $("workPause").focus();
   work.iv = setInterval(workTick, 250);
   keepAwake(true);
   workRender();
 }
 
 function workTick() {
-  if (!work.key) return;
+  if (!work.key || work.paused) return;
   const left = Math.ceil((work.endAt - Date.now()) / 1000);
-  if (!work.go && left <= work.total) { work.go = true; beep(1); }
-  if (left <= 0) workFinish();
-  else workRender();
+  if (left <= 0) { workFinish(); return; }
+  if (!work.go && left <= work.total) { work.go = true; work.lastBeep = left; beep(1); }
+  else if (work.go && left <= 3 && left !== work.lastBeep) { work.lastBeep = left; beep(1, 0.08); } // son 3 sn
+  workRender();
+}
+
+function workPauseToggle() {
+  if (!work.key) return;
+  if (work.paused) {
+    work.endAt = Date.now() + work.leftMs;
+    work.paused = false;
+    work.iv = setInterval(workTick, 250);
+  } else {
+    work.leftMs = work.endAt - Date.now();
+    work.paused = true;
+    clearInterval(work.iv);
+  }
+  workRender();
 }
 
 function workCancel() {
   clearInterval(work.iv);
   if (work.btn) workIdle(work.btn, work.total);
-  Object.assign(work, { key: null, iv: null, btn: null, chk: null, done: null });
+  const focusBack = work.btn?.isConnected ? work.btn : null;
+  const wasOpen = !$("workScreen").hidden;
+  Object.assign(work, { key: null, iv: null, btn: null, chk: null, done: null, paused: false });
+  $("workScreen").hidden = true;
+  if (wasOpen) {
+    document.body.classList.remove("modal-open");
+    focusBack?.focus({ preventScroll: true });
+  }
   keepAwake(false);
+}
+
+function initWork() {
+  $("workPause").addEventListener("click", workPauseToggle);
+  $("workStop").addEventListener("click", workCancel);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && work.key) workCancel(); });
 }
 
 function workFinish() {
@@ -1200,7 +1254,7 @@ function audioUnlock() {
   } catch { audioCtx = null; }
 }
 
-function beep(n) {
+function beep(n, len = 0.2) {
   if (!audioCtx) return;
   try {
     for (let k = 0; k < n; k++) {
@@ -1209,10 +1263,10 @@ function beep(n) {
       const g = audioCtx.createGain();
       o.frequency.value = 880;
       g.gain.setValueAtTime(0.3, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, t + len);
       o.connect(g).connect(audioCtx.destination);
       o.start(t);
-      o.stop(t + 0.22);
+      o.stop(t + len + 0.02);
     }
   } catch { /* ses yok */ }
 }
@@ -1492,6 +1546,7 @@ function boot() {
   initLogin();
   initNav();
   initTimer();
+  initWork();
   initModal();
   initVideoImport();
   initLifecycle();
