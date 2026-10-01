@@ -11,6 +11,7 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 - **Tamamlanan gün:** Tüm hareketler bitince gün yeşil ✓ ile işaretlenir.
 - **Videolar:** Her hareketin Türkçe anlatımlı videosunu kart üzerinden izle.
 - **Dinlenme sayacı:** Set bitince otomatik başlayabilen dinlenme zamanlayıcısı.
+- **Süreli hareketler:** Plank gibi süreli hareketlerde her setin yanındaki ▶ ile geri sayımı başlat; 3 sn hazırlıktan sonra sayar, bitince bip sesiyle seti kendisi işaretler.
 - **Geçmiş ve istatistik:** Önceki antrenmanlarını ve toplamlarını gör.
 - **Çevrimdışı:** İnternet yokken de işaretlemeye devam et; bağlantı gelince kayıtlar eşitlenir.
 

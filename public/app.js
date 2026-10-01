@@ -716,6 +716,7 @@ function exerciseCard(date, item, order, mode = "gym") {
   const setsData = () => ensureEntry(date, item, order).sets;
   const initial = entry ? entry.sets : Array.from({ length: item.sets }, () => ({ completed: false, weight: null }));
   const last = lib.weight ? lastWeight(item.ex, date) : null;
+  const duration = durationOf(item);
 
   const setsBox = h("div", { class: "sets" });
 
@@ -729,6 +730,21 @@ function exerciseCard(date, item, order, mode = "gym") {
       type: "button", class: "chk", role: "checkbox",
       "aria-pressed": String(!!s.completed), "aria-label": `Set ${i + 1} tamamlandı`, text: "✓"
     });
+    // Süreli hareket: sayaç bitince set işaretlenir. Kart o an ekranda değilse (gün değişti vb.) doğrudan kaydedilir.
+    const workKey = `${date}|${item.key}|${i}`;
+    const markDone = () => {
+      const e = ensureEntry(date, item, order);
+      if (!e.sets[i] || e.sets[i].completed) return;
+      e.sets[i].completed = true;
+      e.touched = true;
+      saveNow(date);
+      renderTabs();
+    };
+    const workBtn = duration && h("button", {
+      type: "button", class: "btn work", "aria-label": `Set ${i + 1} süre sayacı`,
+      onclick: () => workToggle(workKey, duration, workBtn, btn, markDone)
+    });
+    if (workBtn) workBind(workKey, duration, workBtn, btn);
     let input = null;
     if (lib.weight) {
       input = h("input", {
@@ -764,7 +780,8 @@ function exerciseCard(date, item, order, mode = "gym") {
     return h("div", { class: "set-row" },
       h("span", { class: "set-label", text: `Set ${i + 1}` }),
       btn,
-      input && h("label", { class: "kg" }, input, h("span", { text: "kg" }))
+      input && h("label", { class: "kg" }, input, h("span", { text: "kg" })),
+      workBtn
     );
   };
 
@@ -1033,6 +1050,7 @@ function timerTick() {
   timer.remaining = Math.max(0, Math.ceil((timer.endAt - Date.now()) / 1000));
   if (timer.remaining === 0) {
     timerStop();
+    beep(2);
     try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
   }
   timerRender();
@@ -1050,6 +1068,7 @@ function timerOpen() {
 }
 
 function timerStart(preset) {
+  audioUnlock();
   timerOpen();
   if (preset) { timer.preset = preset; timerStop(); timer.remaining = preset; }
   if (timer.remaining <= 0) timer.remaining = timer.preset;
@@ -1090,6 +1109,125 @@ function initTimer() {
   $("autoTimer").addEventListener("change", (e) => lsSet("postur-auto-timer", e.target.checked ? "1" : "0"));
   $("timerFab").hidden = false;
   timerRender();
+}
+
+/* ============================================================
+   SÜRELİ HAREKET SAYACI (plank, duvar oturuşu vb.)
+   ============================================================ */
+
+// Süre: şablondaki `duration` (sn) öncelikli, yoksa `reps` metninden okunur: "30 sn", "45 saniye", "1 dk",
+// "1 dk 30 sn", "20–30 sn" (üst sınır). Tekrar sayılı hareketler ("12 tekrar, 2 sn tut") süreli sayılmaz.
+function durationOf(item) {
+  if (Number.isInteger(item.duration) && item.duration >= 5 && item.duration <= 3600) return item.duration;
+  const s = String(item.reps ?? "").toLocaleLowerCase("tr");
+  if (s.includes("tekrar")) return null;
+  const num = String.raw`(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*`;
+  const val = (m) => (m ? parseFloat((m[2] || m[1]).replace(",", ".")) : 0);
+  const total = Math.round(val(s.match(new RegExp(num + "(?:dk|dakika|min)"))) * 60 +
+    val(s.match(new RegExp(num + "(?:sn|saniye|sec)"))));
+  return total >= 5 && total <= 3600 ? total : null;
+}
+
+const WORK_PREP = 3; // başlamadan önce pozisyon alma süresi (sn)
+const work = { key: null, total: 0, endAt: 0, go: false, iv: null, btn: null, chk: null, done: null };
+
+function workIdle(btn, duration) {
+  btn.textContent = `▶ ${fmtTime(duration)}`;
+  btn.classList.remove("is-running");
+  btn.setAttribute("aria-pressed", "false");
+}
+
+function workRender() {
+  const b = work.btn;
+  if (!b?.isConnected) return;
+  const left = Math.max(0, Math.ceil((work.endAt - Date.now()) / 1000));
+  b.textContent = left > work.total ? `Hazır ${left - work.total}` : `■ ${fmtTime(left)}`;
+  b.classList.add("is-running");
+  b.setAttribute("aria-pressed", "true");
+}
+
+// Kart yeniden çizildiğinde çalışan sayaç yeni düğmeye bağlanır.
+function workBind(key, duration, btn, chk) {
+  if (work.key !== key) { workIdle(btn, duration); return; }
+  work.btn = btn;
+  work.chk = chk;
+  workRender();
+}
+
+// Aynı düğmeye tekrar dokunmak sayacı iptal eder; başka bir sette başlatmak öncekini iptal eder.
+function workToggle(key, duration, btn, chk, done) {
+  const same = work.key === key;
+  workCancel();
+  if (same) return;
+  audioUnlock();
+  Object.assign(work, { key, total: duration, btn, chk, done, go: false, endAt: Date.now() + (WORK_PREP + duration) * 1000 });
+  work.iv = setInterval(workTick, 250);
+  keepAwake(true);
+  workRender();
+}
+
+function workTick() {
+  if (!work.key) return;
+  const left = Math.ceil((work.endAt - Date.now()) / 1000);
+  if (!work.go && left <= work.total) { work.go = true; beep(1); }
+  if (left <= 0) workFinish();
+  else workRender();
+}
+
+function workCancel() {
+  clearInterval(work.iv);
+  if (work.btn) workIdle(work.btn, work.total);
+  Object.assign(work, { key: null, iv: null, btn: null, chk: null, done: null });
+  keepAwake(false);
+}
+
+function workFinish() {
+  const { chk, done } = work;
+  workCancel();
+  beep(3);
+  try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
+  // Ekrandaki ✓ düğmesine basılmış gibi: kayıt, otomatik dinlenme ve sonraki harekete geçiş aynı yoldan.
+  if (chk?.isConnected) { if (chk.getAttribute("aria-pressed") !== "true") chk.click(); }
+  else done?.();
+}
+
+// Bip sesi: AudioContext yalnızca kullanıcı dokunuşuyla açılabilir (iOS), ilk başlatmada hazırlanır.
+let audioCtx = null;
+function audioUnlock() {
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume?.();
+  } catch { audioCtx = null; }
+}
+
+function beep(n) {
+  if (!audioCtx) return;
+  try {
+    for (let k = 0; k < n; k++) {
+      const t = audioCtx.currentTime + k * 0.3;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t);
+      o.stop(t + 0.22);
+    }
+  } catch { /* ses yok */ }
+}
+
+// Süreli set sürerken ekran kararmasın (destekleyen tarayıcılarda).
+let wakeSentinel = null;
+async function keepAwake(on) {
+  if (!on) { wakeSentinel?.release().catch(() => {}); wakeSentinel = null; return; }
+  if (wakeSentinel || !navigator.wakeLock) return;
+  try {
+    const s = await navigator.wakeLock.request("screen");
+    if (!work.key) { s.release().catch(() => {}); return; }
+    wakeSentinel = s;
+    s.addEventListener("release", () => { if (wakeSentinel === s) wakeSentinel = null; });
+  } catch { /* izin yok / desteklenmiyor */ }
 }
 
 /* ============================================================
@@ -1275,6 +1413,7 @@ function onSignedOut() {
   state.docs = {};
   Object.values(debounceTimers).forEach(clearTimeout);
   timerReset();
+  workCancel();
   showLogin();
 }
 
@@ -1334,6 +1473,7 @@ function initLifecycle() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (timer.running) timerTick();
+    if (work.key) { workTick(); keepAwake(true); }
     const today = ymd(new Date());
     if (state.uid && today !== state.loadedToday) {
       state.loadedToday = today;

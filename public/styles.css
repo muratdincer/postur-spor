@@ -288,3 +288,7 @@ h1, h2, h3, p { margin: 0; }
 
 .day-done { padding: 16px; text-align: center; font-weight: 700; color: var(--ok); }
 .import-text { width: 100%; font: 13px/1.4 ui-monospace, Menlo, monospace; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fafafc; color: var(--text); }
+
+/* Süreli hareket sayacı (set satırında) */
+.btn.work { margin-left: auto; min-width: 104px; font-variant-numeric: tabular-nums; }
+.btn.work.is-running { background: var(--accent); border-color: var(--accent); color: #fff; }
