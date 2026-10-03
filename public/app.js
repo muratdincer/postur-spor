@@ -132,6 +132,7 @@ const state = {
   totalWorkouts: null,
   totalDirty: true,
   historyShown: 30,
+  statsRange: [7, 30, 90].includes(Number(lsGet("postur-stats-range"))) ? Number(lsGet("postur-stats-range")) : 30,
   openHistory: new Set(),
   programState: "loading", // loading | ready | missing
   initialScroll: false,     // açılışta bugünün kaldığı harekete bir kez kaydır
@@ -966,15 +967,61 @@ function workoutList() {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+// Yakın tarihler göreli ("Bugün", "Dün"), eskiler tam tarih.
+function relDay(date) {
+  const diff = Math.round((parseYmd(ymd(new Date())) - parseYmd(date)) / 86400000);
+  return diff === 0 ? "Bugün" : diff === 1 ? "Dün" : null;
+}
+
+const dayName = (date) => DAYS[dayIndex(parseYmd(date))];
+const weekStart = (date) => { const d = parseYmd(date); return ymd(addDays(d, -dayIndex(d))); };
+
+function weekLabel(start) {
+  const thisWeek = weekStart(ymd(new Date()));
+  if (start === thisWeek) return "Bu hafta";
+  if (start === ymd(addDays(parseYmd(thisWeek), -7))) return "Geçen hafta";
+  const a = parseYmd(start), b = addDays(a, 6);
+  return a.getMonth() === b.getMonth()
+    ? `${a.getDate()}–${b.getDate()} ${MONTHS[b.getMonth()]}`
+    : `${a.getDate()} ${MONTHS[a.getMonth()]} – ${b.getDate()} ${MONTHS[b.getMonth()]}`;
+}
+
+function emptyCard(text, action, onclick) {
+  return h("div", { class: "card empty empty-action" }, h("p", { text }),
+    action && h("button", { type: "button", class: "btn btn-primary", text: action, onclick }));
+}
+
 function renderHistory() {
   const root = $("viewHistory");
   const list = workoutList();
   if (!list.length) {
-    root.replaceChildren(h("div", { class: "card empty", text: "Henüz kayıtlı antrenman yok." }));
+    root.replaceChildren(emptyCard("Henüz kayıtlı antrenman yok. Programdaki setleri işaretledikçe antrenmanların burada listelenir.",
+      "Programa git", () => showView("program")));
     return;
   }
   const shown = list.slice(0, state.historyShown);
-  const items = shown.map((d) => {
+  const items = [];
+  let week = null;
+  for (const d of shown) {
+    const ws = weekStart(d.date);
+    if (ws !== week) {
+      week = ws;
+      const n = list.filter((x) => weekStart(x.date) === ws).length;
+      items.push(h("h2", { class: "section-title", text: `${weekLabel(ws)} · ${n} antrenman` }));
+    }
+    items.push(historyItem(d));
+  }
+  if (list.length > shown.length) {
+    items.push(h("button", {
+      type: "button", class: "btn btn-block", text: "Daha fazla göster",
+      onclick: () => { state.historyShown += 30; renderHistory(); }
+    }));
+  }
+  root.replaceChildren(...items);
+}
+
+function historyItem(d) {
+  {
     const open = state.openHistory.has(d.date);
     const detail = h("div", { class: "h-detail", hidden: !open },
       Object.values(d.exercises)
@@ -996,28 +1043,23 @@ function renderHistory() {
         if (nowOpen) state.openHistory.add(d.date); else state.openHistory.delete(d.date);
       }
     },
-      h("div", null, h("div", { class: "h-date", text: longDate(d.date) }), h("div", { class: "h-day", text: d.day })),
+      h("div", null,
+        h("div", { class: "h-date", text: relDay(d.date) || longDate(d.date) }),
+        h("div", { class: "h-day", text: relDay(d.date) ? `${dayName(d.date)} · ${longDate(d.date)}` : dayName(d.date) })),
       h("span", { class: "h-count", text: `${countSets(d)} set ›` })
     );
     return h("div", { class: "card h-item" }, toggle, detail);
-  });
-  if (list.length > shown.length) {
-    items.push(h("button", {
-      type: "button", class: "btn btn-block", text: "Daha fazla göster",
-      onclick: () => { state.historyShown += 30; renderHistory(); }
-    }));
   }
-  root.replaceChildren(...items);
 }
 
 /* ============================================================
    İSTATİSTİK GÖRÜNÜMÜ
    ============================================================ */
 
-function weightSeries() {
+function weightSeries(from = "") {
   // Programdan bağımsız: kayıtta kg girilmiş her hareket sayılır (program değişse de geçmiş korunur).
   const byEx = {}; // exId -> { name, pts: [{date, max}] }
-  const dates = Object.keys(state.docs).sort();
+  const dates = Object.keys(state.docs).filter((d) => d >= from).sort();
   for (const date of dates) {
     const perEx = {};
     for (const e of Object.values(state.docs[date].exercises)) {
@@ -1061,20 +1103,42 @@ function sparkline(points) {
   return svg;
 }
 
+// Aralık seçici (7/30/90 gün). Uygulama son 90 günü yüklediği için 90 günde önceki dönemle karşılaştırma yok.
+function rangeSwitch() {
+  const opt = (n) => h("button", {
+    type: "button", role: "radio", class: "seg-btn", "aria-checked": String(state.statsRange === n),
+    tabindex: state.statsRange === n ? "0" : "-1", text: `${n} gün`,
+    onclick: () => { state.statsRange = n; lsSet("postur-stats-range", String(n)); renderStats(); }
+  });
+  return h("div", { class: "segmented seg-3", role: "radiogroup", "aria-label": "Zaman aralığı", "data-rg": "range" },
+    opt(7), opt(30), opt(90));
+}
+
+// Önceki döneme göre fark: renge ek olarak ok ve metinle anlatılır.
+function deltaLine(cur, prev, range) {
+  if (prev == null) return null;
+  const d = cur - prev;
+  const text = d > 0 ? `↑ ${d} artış` : d < 0 ? `↓ ${-d} azalış` : "= aynı";
+  return h("div", { class: `delta${d > 0 ? " up" : ""}`, text: `${text}, önceki ${range} güne göre` });
+}
+
 function renderStats() {
   const root = $("viewStats");
   const list = workoutList();
   const today = new Date();
-  const d7 = ymd(addDays(today, -6));
-  const d30 = ymd(addDays(today, -29));
-  const c7 = list.filter((d) => d.date >= d7).length;
-  const c30 = list.filter((d) => d.date >= d30).length;
-  const sets = list.reduce((n, d) => n + countSets(d), 0);
+  const R = state.statsRange;
+  const from = ymd(addDays(today, -(R - 1)));
+  const prevFrom = ymd(addDays(today, -(2 * R - 1)));
+  const inRange = list.filter((d) => d.date >= from);
+  const inPrev = R < 90 ? list.filter((d) => d.date >= prevFrom && d.date < from) : null;
+  const setsOf = (l) => l.reduce((n, d) => n + countSets(d), 0);
   const total = state.totalWorkouts ?? list.length;
+  const perWeek = (inRange.length / (R / 7)).toFixed(1).replace(".", ",");
 
-  const tile = (v, l) => h("div", { class: "card tile" }, h("div", { class: "v", text: String(v) }), h("div", { class: "l", text: l }));
+  const tile = (v, l, delta, id) => h("div", { class: "card tile" },
+    h("div", { class: "v", id, text: String(v) }), h("div", { class: "l", text: l }), delta);
 
-  const series = weightSeries();
+  const series = weightSeries(from);
   const rows = Object.values(series)
     .sort((a, b) => a.name.localeCompare(b.name, "tr"))
     .map(({ name, pts }) => {
@@ -1085,19 +1149,20 @@ function renderStats() {
           h("div", { class: "w-range", text: `${first} kg → ${lastV} kg` }),
           h("div", { class: "w-max", text: `Maks: ${mx} kg` })
         ),
-        pts.length >= 2 && sparkline(pts)
+        pts.length >= 2 ? sparkline(pts) : h("div", { class: "w-note", text: "Grafik için en az 2 kayıt gerekir" })
       );
     });
 
   root.replaceChildren(
+    rangeSwitch(),
     h("div", { class: "tiles" },
-      tile(c7, "Son 7 gün antrenman"),
-      tile(c30, "Son 30 gün antrenman"),
-      tile(total, "Toplam antrenman"),
-      tile(sets, "Tamamlanan set (son 90 gün)")
+      tile(inRange.length, `Antrenman (son ${R} gün)`, deltaLine(inRange.length, inPrev?.length, R)),
+      tile(setsOf(inRange), `Tamamlanan set (son ${R} gün)`, deltaLine(setsOf(inRange), inPrev && setsOf(inPrev), R)),
+      tile(perWeek, `Haftalık ortalama antrenman (son ${R} gün)`),
+      tile(total, "Toplam antrenman (tümü)", null, "totalTile")
     ),
-    h("div", { class: "section-title", text: "Ağırlık gelişimi (son 90 gün)" }),
-    ...(rows.length ? rows : [h("div", { class: "card empty", text: "Ağırlıklı hareket kaydı yok." })])
+    h("h2", { class: "section-title", text: `Ağırlık gelişimi (son ${R} gün)` }),
+    ...(rows.length ? rows : [emptyCard("Bu aralıkta ağırlık kaydı yok. Ağırlıklı hareketlerde kg girdikçe gelişimin burada görünür.")])
   );
 
   refreshTotal();
@@ -1112,10 +1177,7 @@ async function refreshTotal() {
       query(collection(db, "users", state.uid, "workouts"), where("completedSets", ">", 0))
     );
     state.totalWorkouts = snap.data().count;
-    if (state.view === "stats") {
-      const tiles = $("viewStats").querySelectorAll(".tile .v");
-      if (tiles[2]) tiles[2].textContent = String(state.totalWorkouts);
-    }
+    if (state.view === "stats" && $("totalTile")) $("totalTile").textContent = String(state.totalWorkouts);
   } catch { state.totalDirty = true; }
 }
 
