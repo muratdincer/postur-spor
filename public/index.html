@@ -3,22 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f2f2f7">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Postür & Spor">
   <title>Postür &amp; Spor</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <div id="splash" class="splash">Yükleniyor…</div>
+  <div id="splash" class="splash" role="status">Yükleniyor…</div>
 
   <!-- GİRİŞ -->
   <main id="loginScreen" class="login" hidden>
     <form id="loginForm" class="card login-card" novalidate>
       <h1>Postür &amp; Spor</h1>
-      <p class="muted">Devam etmek için giriş yapın.</p>
+      <p class="muted">Devam etmek için giriş yap.</p>
       <label class="field">
         <span>E-posta</span>
         <input id="loginEmail" type="email" name="email" autocomplete="username" inputmode="email" autocapitalize="off" autocorrect="off" required>
@@ -28,7 +33,7 @@
         <input id="loginPassword" type="password" name="password" autocomplete="current-password" required>
       </label>
       <p id="loginError" class="form-error" role="alert" hidden></p>
-      <button id="loginSubmit" class="btn btn-primary btn-block" type="submit">Giriş Yap</button>
+      <button id="loginSubmit" class="btn btn-primary btn-block" type="submit">Giriş yap</button>
     </form>
   </main>
 
@@ -38,10 +43,10 @@
       <div class="topbar-row">
         <h1 class="app-title">Postür &amp; Spor</h1>
         <span id="saveStatus" class="save-status" data-state="idle" aria-live="polite"></span>
-        <button id="logoutBtn" class="btn btn-ghost" type="button">Çıkış</button>
+        <button id="logoutBtn" class="btn btn-ghost" type="button">Çıkış yap</button>
       </div>
       <div id="offlineBanner" class="offline-banner" role="status" hidden>
-        Bağlantı yok, değişiklikler geçici olarak cihazda tutuluyor.
+        Bağlantı yok. Değişikliklerin cihazda tutuluyor, bağlantı gelince kaydedilecek.
       </div>
       <nav id="dayTabs" class="day-tabs" role="tablist" aria-label="Haftanın günleri"></nav>
     </header>
@@ -64,9 +69,18 @@
     </main>
 
     <nav class="bottom-nav" aria-label="Ana gezinme">
-      <button type="button" class="nav-btn is-active" data-view="program">PROGRAM</button>
-      <button type="button" class="nav-btn" data-view="history">GEÇMİŞ</button>
-      <button type="button" class="nav-btn" data-view="stats">İSTATİSTİK</button>
+      <button type="button" class="nav-btn" data-view="program" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7.5 13.5h3M7.5 17h6"/></svg>
+        <span>Program</span>
+      </button>
+      <button type="button" class="nav-btn" data-view="history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>
+        <span>Geçmiş</span>
+      </button>
+      <button type="button" class="nav-btn" data-view="stats">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        <span>İstatistik</span>
+      </button>
     </nav>
 
     <!-- DİNLENME SAYACI -->
@@ -86,7 +100,7 @@
       </div>
       <label class="check-row">
         <input id="autoTimer" type="checkbox">
-        <span>Bir set tamamlandığında 90 sn dinlenmeyi otomatik başlat</span>
+        <span>Set bitince 90 sn dinlenmeyi otomatik başlat</span>
       </label>
     </section>
     <!-- SÜRELİ HAREKET SAYACI (tam ekran) -->
@@ -105,14 +119,30 @@
         <button id="workStop" type="button" class="btn btn-ghost">İptal</button>
       </div>
     </div>
-    <button id="timerFab" type="button" class="timer-fab" aria-label="Dinlenme sayacını aç">⏱</button>
+    <button id="timerFab" type="button" class="timer-fab" aria-label="Dinlenme sayacını aç"><span aria-hidden="true">⏱</span></button>
+
+    <!-- KISA BİLDİRİM -->
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+      <span id="toastMsg" class="toast-msg"></span>
+      <button id="toastAction" type="button" class="btn btn-ghost" hidden></button>
+    </div>
+
+    <!-- ONAY -->
+    <div id="confirmModal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText" hidden>
+      <div class="modal-sheet">
+        <h2 id="confirmTitle" class="modal-head"></h2>
+        <p id="confirmText" class="modal-text"></p>
+        <button id="confirmOk" type="button" class="btn btn-block"></button>
+        <button id="confirmCancel" type="button" class="btn btn-ghost btn-block">Vazgeç</button>
+      </div>
+    </div>
 
     <!-- VİDEO MODALI -->
     <div id="videoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="videoTitle" hidden>
       <div class="modal-sheet">
         <div class="modal-head">
           <h2 id="videoTitle"></h2>
-          <button id="videoClose" type="button" class="btn btn-ghost" aria-label="Kapat">Kapat ✕</button>
+          <button id="videoClose" type="button" class="btn btn-ghost">Kapat</button>
         </div>
         <div id="videoFrame" class="video-frame"></div>
         <a id="videoLink" class="btn btn-block" target="_blank" rel="noopener noreferrer">YouTube'da aç ↗</a>
@@ -125,7 +155,7 @@
         <div class="modal-head">
           <h2 id="importTitle">Video listesini içe aktar</h2>
         </div>
-        <textarea id="importText" class="import-text" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="JSON'u buraya yapıştır"></textarea>
+        <textarea id="importText" class="import-text" aria-labelledby="importTitle" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="JSON'u buraya yapıştır"></textarea>
         <p id="importError" class="form-error" role="alert" hidden></p>
         <button id="importSave" type="button" class="btn btn-primary btn-block">Kaydet</button>
         <button id="importCancel" type="button" class="btn btn-ghost btn-block">İptal</button>
