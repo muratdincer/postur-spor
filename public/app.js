@@ -79,6 +79,15 @@ function relLabel(diff) {
   return diff < 0 ? `${-diff} GÜN ÖNCE` : `${diff} GÜN SONRA`;
 }
 
+// Ağırlık alanı denetimi: boş geçerlidir (ağırlık yok); hata metni ya da null döner.
+function weightError(str) {
+  const t = String(str).trim();
+  if (!t) return null;
+  if (!/^\d+([.,]\d+)?$/.test(t)) return "Ağırlığı sayı olarak yaz (ör. 12,5).";
+  if (parseFloat(t.replace(",", ".")) > 1000) return "En fazla 1000 kg girilebilir.";
+  return null;
+}
+
 function parseWeight(str) {
   const n = parseFloat(String(str).replace(",", "."));
   if (!Number.isFinite(n) || n < 0) return null;
@@ -141,14 +150,49 @@ let lastError = false;
 function setStatus(s) {
   const el = $("saveStatus");
   el.dataset.state = s;
-  el.textContent = { saving: "Kaydediliyor…", saved: "Kaydedildi ✓", offline: "Çevrimdışı", idle: "" }[s] || "";
+  el.textContent = { saving: "Kaydediliyor…", saved: "Kaydedildi ✓", offline: "Çevrimdışı", error: "Kaydedilemedi", idle: "" }[s] || "";
 }
 
+// Bağlantı yokluğu ile sunucu hatası ayrı gösterilir; ikisinde de veri cihazda bekler.
 function refreshConnectionUi() {
-  const offline = !navigator.onLine || lastError;
-  $("offlineBanner").hidden = !offline;
+  const offline = !navigator.onLine;
+  const failed = !offline && lastError;
+  $("offlineBanner").hidden = !offline && !failed;
+  $("retryBtn").hidden = !failed;
+  $("offlineText").textContent = offline
+    ? "Bağlantı yok. Değişikliklerin cihazda tutuluyor, bağlantı gelince kaydedilecek."
+    : failed ? "Sunucuya kaydedilemedi. Değişikliklerin cihazda tutuluyor, birazdan yeniden denenecek." : "";
   if (offline) setStatus("offline");
+  else if (failed) setStatus("error");
   else if (inflight > 0) setStatus("saving");
+}
+
+/* ---------- Yeniden deneme: hata sonrası artan aralıkla (5 sn, 10 sn … en fazla 5 dk) ---------- */
+
+let retryTimer = null;
+let retryDelay = 5000;
+
+function scheduleRetry() {
+  if (retryTimer || !navigator.onLine) return; // çevrimdışıyken "online" olayı tetikler
+  retryTimer = setTimeout(retryNow, retryDelay);
+  retryDelay = Math.min(retryDelay * 2, 300000);
+}
+
+function retryNow() {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  lastError = false;
+  refreshConnectionUi();
+  if (!state.uid) return;
+  pendingDates().forEach((date) => saveNow(date));
+  if (!state.historyLoaded) loadHistory().then(renderCurrent);
+  if (state.programState !== "ready") loadProgram().then(renderCurrent);
+}
+
+function retrySucceeded() {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  retryDelay = 5000;
 }
 
 /* ============================================================
@@ -231,9 +275,11 @@ async function saveNow(date) {
     await setDoc(workoutRef(date), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
     if (versions[date] === ver) lsDel(key);
     lastError = false;
+    retrySucceeded();
   } catch (err) {
     console.error("Kayıt hatası:", err);
     lastError = true;
+    scheduleRetry();
   } finally {
     inflight--;
     if (inflight === 0) {
@@ -290,6 +336,7 @@ async function loadHistory() {
   } catch (err) {
     console.error("Geçmiş yüklenemedi:", err);
     lastError = true;
+    scheduleRetry();
   }
   state.loading = false;
   refreshConnectionUi();
@@ -346,18 +393,28 @@ async function loadVideos() {
 
 // { hareketId: { id, title, channel?, language?, start? } } biçimini doğrular ve temizler; geçersizse null.
 function validVideos(obj) {
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
-  const out = {};
-  for (const [key, v] of Object.entries(obj)) {
-    if (!/^[A-Za-z0-9]{1,40}$/.test(key) || !v || typeof v !== "object") return null;
-    if (typeof v.id !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(v.id)) return null;
-    if (typeof v.title !== "string" || !v.title || v.title.length > 200) return null;
-    const start = v.start ?? 0;
-    if (!Number.isInteger(start) || start < 0 || start > 36000) return null;
-    const str = (x) => (typeof x === "string" && x.length <= 100 ? x : null);
-    out[key] = { id: v.id, title: v.title, channel: str(v.channel), language: str(v.language), start };
+  const r = checkVideos(obj);
+  return r.errors.length ? null : r.items;
+}
+
+// Aynı denetim, içe aktarmada her hatalı kaydı adıyla bildirmek için hata listesiyle döner.
+function checkVideos(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    return { items: {}, errors: ['Liste bir JSON nesnesi olmalı: { "hareketKimliği": { "id": "…", "title": "…" } }'] };
   }
-  return out;
+  const items = {}, errors = [];
+  for (const [key, v] of Object.entries(obj)) {
+    const fail = (msg) => errors.push(`"${key}": ${msg}`);
+    if (!/^[A-Za-z0-9]{1,40}$/.test(key)) { fail("hareket kimliği yalnızca harf ve rakam olabilir (en fazla 40)."); continue; }
+    if (!v || typeof v !== "object") { fail("değer bir nesne olmalı."); continue; }
+    if (typeof v.id !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(v.id)) { fail("YouTube video kimliği (id) 11 karakter olmalı."); continue; }
+    if (typeof v.title !== "string" || !v.title || v.title.length > 200) { fail("başlık (title) boş olamaz, en fazla 200 karakter."); continue; }
+    const start = v.start ?? 0;
+    if (!Number.isInteger(start) || start < 0 || start > 36000) { fail("başlangıç saniyesi (start) 0 ile 36000 arasında tam sayı olmalı."); continue; }
+    const str = (x) => (typeof x === "string" && x.length <= 100 ? x : null);
+    items[key] = { id: v.id, title: v.title, channel: str(v.channel), language: str(v.language), start };
+  }
+  return { items, errors };
 }
 const PROGRAM_FIELDS = ["id", "version", "name", "safetyNote", "progression", "exercises", "days"];
 
@@ -475,7 +532,22 @@ function noProgramCard() {
         uidBox, copyBtn)
     : h("div", { class: "card day-head no-program" },
         h("h2", { text: "Program yüklenemedi" }),
-        h("p", { class: "sub", text: "Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip sayfayı yenile." }));
+        h("p", { class: "sub", text: "Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dene." }),
+        retryProgramBtn());
+}
+
+function retryProgramBtn() {
+  const btn = h("button", {
+    type: "button", class: "btn btn-primary", text: "Tekrar dene",
+    onclick: async () => {
+      btn.disabled = true;
+      btn.textContent = "Deneniyor…";
+      await loadProgram();
+      renderCurrent();
+      if (state.programState !== "ready") toast("Program yine yüklenemedi. Bağlantını kontrol edip biraz sonra tekrar dene.");
+    }
+  });
+  return btn;
 }
 
 // Eski uygulamadaki anahtarlar: postur-check-<gün>-<n> ("1"), postur-v3-<gün>-<n>-set-<i> ("1"),
@@ -611,7 +683,7 @@ function renderProgram() {
   const date = weekDates()[idx];
   const panel = $("dayPanel");
   if (!PROGRAM) {
-    panel.replaceChildren(state.programState === "missing" ? noProgramCard()
+    panel.replaceChildren(state.programState === "missing" || state.programState === "error" ? noProgramCard()
       : h("div", { class: "card empty", text: "Program yükleniyor…" }));
     return;
   }
@@ -751,20 +823,34 @@ function exerciseCard(date, item, order, mode = "gym") {
     });
     if (workBtn) workBind(workKey, duration, workBtn, btn);
     let input = null;
+    const errId = `kgErr-${item.key}-${i}`;
+    const errEl = h("p", { id: errId, class: "form-error set-error", hidden: true });
+    const showWeightError = (msg) => {
+      errEl.textContent = msg || "";
+      errEl.hidden = !msg;
+      if (msg) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid");
+    };
     if (lib.weight) {
       input = h("input", {
         type: "text", inputmode: "decimal", pattern: "[0-9]*[.,]?[0-9]*", autocomplete: "off",
         enterkeyhint: "done", placeholder: last != null ? String(last).replace(".", ",") : "0",
         value: s.weight != null ? String(s.weight).replace(".", ",") : "",
-        "aria-label": `Set ${i + 1} ağırlık (kg)`
+        "aria-label": `Set ${i + 1} ağırlık (kg)`, "aria-describedby": errId
       });
+      // Geçersiz değer kaydedilmez; uyarı alan bırakılınca gösterilir, düzeltilince hemen kalkar.
       input.addEventListener("input", () => {
+        const msg = weightError(input.value);
+        if (msg) { if (errEl.isConnected && !errEl.hidden) showWeightError(msg); return; }
+        showWeightError(null);
         const e = ensureEntry(date, item, order);
         e.sets[i].weight = parseWeight(input.value);
         e.touched = true;
         scheduleSave(date);
       });
-      input.addEventListener("blur", () => { if (debounceTimers[date]) saveNow(date); });
+      input.addEventListener("blur", () => {
+        showWeightError(weightError(input.value));
+        if (debounceTimers[date]) saveNow(date);
+      });
     }
     btn.addEventListener("click", () => {
       const e = ensureEntry(date, item, order);
@@ -774,6 +860,7 @@ function exerciseCard(date, item, order, mode = "gym") {
       if (cur.completed && cur.weight == null && input && last != null) {
         cur.weight = last; // son ağırlık başlangıç önerisi
         input.value = String(last).replace(".", ",");
+        showWeightError(null);
       }
       btn.setAttribute("aria-checked", String(cur.completed));
       saveNow(date);
@@ -786,7 +873,8 @@ function exerciseCard(date, item, order, mode = "gym") {
       h("span", { class: "set-label", text: `Set ${i + 1}` }),
       btn,
       input && h("label", { class: "kg" }, input, h("span", { text: "kg" })),
-      workBtn
+      workBtn,
+      input && errEl
     );
   };
 
@@ -1516,7 +1604,8 @@ function closeVideo() {
 function openVideoImport() {
   if (!state.uid) return;
   $("importText").value = "";
-  $("importError").hidden = true;
+  $("importPreview").textContent = "";
+  showImportErrors([]);
   openModal($("importModal"), { close: closeVideoImport, focus: $("importText") });
 }
 
@@ -1525,26 +1614,79 @@ function closeVideoImport() {
   if (location.hash === "#videolar") history.replaceState(null, "", location.pathname + location.search);
 }
 
-async function saveVideoImport() {
-  const err = $("importError");
-  let items = null;
-  try { items = validVideos(JSON.parse($("importText").value)); } catch { /* geçersiz JSON */ }
-  if (!items || !Object.keys(items).length) {
-    err.textContent = "Liste okunamadı: JSON eksik ya da biçimi hatalı. Listenin tamamını yeniden yapıştırıp tekrar dene.";
-    err.hidden = false;
-    return;
+// Yapıştırılan metni çözer: { items, errors }. JSON hatasında satır numarası verilir.
+function parseImport(text) {
+  if (!text.trim()) return { items: {}, errors: [] };
+  let obj;
+  try { obj = JSON.parse(text); } catch (e) {
+    const pos = Number(String(e.message).match(/position (\d+)/)?.[1]);
+    const line = Number.isFinite(pos) ? text.slice(0, pos).split("\n").length : null;
+    return { items: {}, errors: [`JSON okunamadı${line ? ` (${line}. satır civarı)` : ""}: eksik ya da fazla virgül, tırnak veya parantez olabilir.`] };
   }
+  const r = checkVideos(obj);
+  if (!r.errors.length && !Object.keys(r.items).length) r.errors.push("Listede hiç video yok.");
+  return r;
+}
+
+// Kaydetmeden önce mevcut listeyle farkı söyler.
+function importDiff(items) {
+  const cur = exerciseVideos;
+  const keys = Object.keys(items);
+  const added = keys.filter((k) => !cur[k]).length;
+  const changed = keys.filter((k) => cur[k] && (cur[k].id !== items[k].id || cur[k].start !== items[k].start || cur[k].title !== items[k].title)).length;
+  const removed = Object.keys(cur).filter((k) => !items[k]).length;
+  const parts = [added && `${added} yeni`, changed && `${changed} değişecek`, removed && `${removed} kaldırılacak`].filter(Boolean);
+  return `${keys.length} video okundu${parts.length ? `: ${parts.join(", ")}` : ", mevcut listeyle aynı"}.` +
+    (removed ? " Listede olmayan hareketlerin videosu silinir." : "");
+}
+
+function showImportErrors(errors) {
+  const err = $("importError");
+  err.hidden = !errors.length;
+  err.replaceChildren();
+  if (!errors.length) return;
+  err.append(errors.length === 1 ? errors[0] : `${errors.length} hata var, düzeltip tekrar dene:`);
+  if (errors.length > 1) err.append(h("ul", null, errors.slice(0, 5).map((t) => h("li", { text: t })),
+    errors.length > 5 && h("li", { text: `… ve ${errors.length - 5} hata daha` })));
+}
+
+let importPreviewTimer = null;
+function updateImportPreview() {
+  clearTimeout(importPreviewTimer);
+  importPreviewTimer = setTimeout(() => {
+    const r = parseImport($("importText").value);
+    $("importPreview").textContent = !r.errors.length && Object.keys(r.items).length ? importDiff(r.items) : "";
+    if (!$("importError").hidden) showImportErrors(r.errors); // hata gösteriliyorsa düzeldikçe güncelle
+  }, 300);
+}
+
+async function writeVideos(items) {
+  await setDoc(videosRef(), { items, updatedAt: serverTimestamp() });
+  exerciseVideos = items;
+  lsSet(videosCacheKey(), JSON.stringify(items));
+  renderCurrent();
+}
+
+async function saveVideoImport() {
+  const r = parseImport($("importText").value);
+  if (!r.errors.length && !Object.keys(r.items).length) r.errors.push("Önce video listesini (JSON) yapıştır.");
+  showImportErrors(r.errors);
+  if (r.errors.length) return;
+  const previous = exerciseVideos;
   $("importSave").disabled = true;
   try {
-    await setDoc(videosRef(), { items, updatedAt: serverTimestamp() });
-    exerciseVideos = items;
-    lsSet(videosCacheKey(), JSON.stringify(items));
+    await writeVideos(r.items);
     closeVideoImport();
-    renderCurrent();
-    toast(`${Object.keys(items).length} video kaydedildi.`);
-  } catch (e) {
-    err.textContent = "Liste kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.";
-    err.hidden = false;
+    // Eski liste 10 sn içinde geri yüklenebilir.
+    toast(`${Object.keys(r.items).length} video kaydedildi.`, {
+      action: "Geri al", duration: 10000,
+      onAction: async () => {
+        try { await writeVideos(previous); toast("Önceki video listesi geri yüklendi."); }
+        catch { toast("Önceki liste geri yüklenemedi. Bağlantını kontrol edip tekrar dene."); }
+      }
+    });
+  } catch {
+    showImportErrors(["Liste kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene."]);
   } finally {
     $("importSave").disabled = false;
   }
@@ -1553,6 +1695,7 @@ async function saveVideoImport() {
 function initVideoImport() {
   $("importCancel").addEventListener("click", closeVideoImport);
   $("importSave").addEventListener("click", saveVideoImport);
+  $("importText").addEventListener("input", updateImportPreview);
   window.addEventListener("hashchange", () => { if (location.hash === "#videolar") openVideoImport(); });
 }
 
@@ -1624,6 +1767,8 @@ function onSignedOut() {
   state.programState = "loading";
   state.docs = {};
   Object.values(debounceTimers).forEach(clearTimeout);
+  retrySucceeded();
+  lastError = false;
   timerReset();
   workCancel();
   [...modalStack].reverse().forEach((m) => m.close());
@@ -1682,14 +1827,8 @@ function initNav() {
 }
 
 function initLifecycle() {
-  window.addEventListener("online", () => {
-    lastError = false;
-    refreshConnectionUi();
-    if (!state.uid) return;
-    pendingDates().forEach((date) => saveNow(date));
-    if (!state.historyLoaded) loadHistory().then(renderCurrent);
-    if (state.programState !== "ready") loadProgram().then(renderCurrent);
-  });
+  window.addEventListener("online", retryNow);
+  $("retryBtn").addEventListener("click", retryNow);
   window.addEventListener("offline", refreshConnectionUi);
   // Uygulama arka plandan dönerken gün değiştiyse yeniden bugüne git.
   document.addEventListener("visibilitychange", () => {
