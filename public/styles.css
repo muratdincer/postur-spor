@@ -561,7 +561,12 @@ h1, h2, h3, p { margin: 0; }
 .work-bar div { height: 100%; background: var(--on-accent); transform-origin: left; transform: scaleX(0); transition: transform .25s linear; }
 .work-hint { margin: var(--sp-2) auto 0; max-width: 480px; font-size: var(--fs-md); }
 .work-music { display: grid; justify-items: center; gap: var(--sp-1); margin-top: var(--sp-3); }
-.work-track { font-size: var(--fs-md); font-weight: 600; max-width: 480px; }
+.work-track { font-size: var(--fs-md); font-weight: 600; max-width: 480px; flex: 1; }
+.music-row { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); width: 100%; max-width: 480px; }
+.work-music .btn.music-skip {
+  flex: 0 0 auto; width: var(--tap); height: var(--tap); padding: 0; border-radius: 50%;
+  font-size: 1.125rem; display: grid; place-items: center;
+}
 .work-music .btn { color: var(--on-accent); border: 1px solid color-mix(in srgb, var(--on-accent) 60%, transparent); background: transparent; }
 .work-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 480px; margin: 0 auto; }
 .work-actions .btn-ghost { grid-column: 1 / -1; }
