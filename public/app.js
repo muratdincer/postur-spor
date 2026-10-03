@@ -1687,6 +1687,7 @@ function openSettings() {
   $("accountEmail").textContent = auth?.currentUser?.email ? `Giriş yapılan hesap: ${auth.currentUser.email}` : "";
   $("accountEmail").hidden = !auth?.currentUser?.email;
   refreshProgramSettings();
+  if (!exportFile) resetExport();
   const opts = [...document.querySelectorAll("[data-theme-opt]")];
   openModal($("settingsModal"), { focus: opts.find((b) => b.getAttribute("aria-checked") === "true") });
 }
@@ -1698,6 +1699,8 @@ function initSettings() {
   $("settingsClose").addEventListener("click", () => closeModal($("settingsModal")));
   $("exportCsv").addEventListener("click", () => exportWorkouts("csv"));
   $("exportJson").addEventListener("click", () => exportWorkouts("json"));
+  $("exportDeliver").addEventListener("click", deliverExport);
+  $("exportCancel").addEventListener("click", () => { resetExport(); $("exportCsv").focus(); });
 }
 
 /* ---------- Veri dışa aktarma (KVKK veri taşınabilirliği) ---------- */
@@ -1730,31 +1733,71 @@ function workoutsCsv(docs) {
   return "\uFEFF" + rows.join("\r\n"); // BOM + ";" + ondalık virgül: Türkçe Excel doğru açar
 }
 
+/* Dışa aktarma iki aşamalı: önce hazırlanır (gösterge ile), paylaşım penceresi yalnızca kullanıcı
+   "Paylaş"a basınca açılır. Böylece pencere beklenmedik anda açılmaz ve iOS'un "kullanıcı dokunuşu"
+   şartı (navigator.share) her zaman sağlanır. Paylaşım yoksa (masaüstü) hazırlanınca doğrudan iner. */
+let exportFile = null;
+
+function resetExport() {
+  exportFile = null;
+  $("exportReady").hidden = true;
+  $("exportStatus").textContent = "";
+  for (const [id, label] of [["exportCsv", "Excel için (CSV)"], ["exportJson", "Yedek (JSON)"]]) {
+    $(id).disabled = false;
+    $(id).textContent = label;
+    $(id).removeAttribute("aria-busy");
+  }
+}
+
 async function exportWorkouts(format) {
+  resetExport();
   const btn = $(format === "csv" ? "exportCsv" : "exportJson");
-  btn.disabled = true;
+  $("exportCsv").disabled = $("exportJson").disabled = true;
+  btn.textContent = "Hazırlanıyor…";
+  btn.setAttribute("aria-busy", "true");
+  $("exportStatus").textContent = "Antrenman kayıtların hazırlanıyor…";
   try {
     const { docs, partial } = await allWorkouts();
     const list = Object.values(docs).filter((d) => countSets(d) > 0 || Object.values(d.exercises).some((e) => e.sets.some((s) => s.weight != null)));
-    if (!list.length) { toast("Dışa aktarılacak antrenman kaydı yok."); return; }
+    if (!list.length) { resetExport(); $("exportStatus").textContent = "Dışa aktarılacak antrenman kaydı yok."; return; }
     const name = `postur-spor-${ymd(new Date())}.${format}`;
     const body = format === "csv"
       ? workoutsCsv(Object.fromEntries(list.map((d) => [d.date, d])))
       : JSON.stringify({ exportedAt: new Date().toISOString(), workouts: list.map((d) => ({ date: d.date, exercises: Object.values(d.exercises).map(({ touched, ...e }) => e) })) }, null, 2);
     const file = new File([body], name, { type: format === "csv" ? "text/csv" : "application/json" });
-    await deliverFile(file);
-    toast(`${list.length} antrenman dışa aktarıldı${partial ? " (çevrimdışı: yalnızca cihazdaki son 90 gün)" : ""}.`);
-  } finally {
-    btn.disabled = false;
+    const what = `${list.length} antrenman${partial ? " (çevrimdışı: yalnızca cihazdaki son 90 gün)" : ""}`;
+    resetExport();
+    if (navigator.canShare?.({ files: [file] })) {
+      exportFile = file;
+      $("exportStatus").textContent = `${what} hazır: ${name}. Göndermek ya da Dosyalar'a kaydetmek için Paylaş'a dokun.`;
+      $("exportReady").hidden = false;
+      $("exportDeliver").focus();
+    } else {
+      downloadFile(file);
+      $("exportStatus").textContent = `${what} indirildi: ${name}.`;
+    }
+  } catch {
+    resetExport();
+    $("exportStatus").textContent = "Kayıtlar hazırlanamadı. Biraz sonra tekrar dene.";
   }
 }
 
-// iPhone'da paylaşım sayfası (Dosyalar'a kaydet, Mail…), diğerlerinde indirme.
-async function deliverFile(file) {
-  if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: file.name }); return; }
-    catch (e) { if (e?.name === "AbortError") return; }
+async function deliverExport() {
+  const file = exportFile;
+  if (!file) return;
+  try {
+    await navigator.share({ files: [file], title: file.name });
+    resetExport();
+    $("exportStatus").textContent = `Paylaşıldı: ${file.name}.`;
+  } catch (e) {
+    if (e?.name === "AbortError") return; // vazgeçti; dosya hazır kalır, yeniden Paylaş'a basabilir
+    downloadFile(file);
+    resetExport();
+    $("exportStatus").textContent = `Paylaşılamadı, indirildi: ${file.name}.`;
   }
+}
+
+function downloadFile(file) {
   const url = URL.createObjectURL(file);
   const a = h("a", { href: url, download: file.name, hidden: true });
   document.body.append(a);
@@ -1779,7 +1822,8 @@ function aiDraft() {
   try {
     const d = JSON.parse(lsGet(aiDraftKey()));
     if (!d || Date.now() - (d.savedAt || 0) > AI_DRAFT_DAYS * 86400000) return null;
-    return { step: [1, 2, 3].includes(d.step) ? d.step : 1, request: String(d.request || ""), output: String(d.output || ""), savedAt: d.savedAt };
+    return { step: [1, 2, 3].includes(d.step) ? d.step : 1, request: String(d.request || ""), output: String(d.output || ""),
+      mode: ["modify", "new"].includes(d.mode) ? d.mode : null, savedAt: d.savedAt };
   } catch { return null; }
 }
 
@@ -1813,15 +1857,6 @@ function aiDraftCard() {
 
 /* ---------- Talimat ---------- */
 
-function programSummary(p) {
-  if (!p) return "(Henüz programı yok.)";
-  const line = (plan) => plan.rest ? "Dinlenme"
-    : `${plan.title || ""}: ` + plan.items.map((it) => `${it.name || p.exercises[it.ex]?.name || it.ex} ${it.sets > 1 ? `${it.sets}×` : ""}${it.reps}`).join(", ");
-  return [`Ad: ${p.name || "-"}`,
-    ...p.days.map((d, i) => `- ${DAYS[i]} (salon) ${line(d)}${d.home ? `\n  ${DAYS[i]} (ev) ${line(d.home)}` : ""}`),
-    p.safetyNote ? `Güvenlik notu: ${p.safetyNote}` : ""].filter(Boolean).join("\n");
-}
-
 function exerciseLibrary() {
   const lib = { ...(PROGRAM?.exercises || {}) };
   const rows = Object.entries(lib).map(([k, e]) =>
@@ -1846,26 +1881,46 @@ const AI_EXAMPLE = {
   ]
 };
 
-function buildAiPrompt(request) {
+// Programın talimata girecek hali (uygulamaya özel alanlar olmadan).
+function programForPrompt(p) {
+  const { id, version, source, createdAt, ...rest } = pickProgram(p);
+  return JSON.stringify(rest, null, 2);
+}
+
+// mode: "modify" → mevcut program korunur, yalnızca istenen kısımlar değişir; "new" → sıfırdan program.
+function buildAiPrompt(request, mode) {
   const req = request.trim();
+  const modify = mode === "modify" && PROGRAM;
+  const task = modify
+    ? `Deneyimli bir antrenörsün. Kişinin MEVCUT haftalık programını isteğine göre DEĞİŞTİRECEKSİN. İstenmeyen kısımlara dokunma: gün başlıkları, hareketler, hareket anahtarları ve "key" değerleri aynen kalsın; yalnızca kişinin istediği kısımları değiştir. Program "Postür & Spor" uygulamasına yüklenecek; bu yüzden sonunda aşağıdaki JSON biçimine tam uymalısın. Türkçe konuş.`
+    : `Deneyimli bir antrenörsün. Aşağıdaki kişi için SIFIRDAN yeni bir haftalık spor ve postür programı hazırlayacaksın. Program "Postür & Spor" uygulamasına yüklenecek; bu yüzden sonunda aşağıdaki JSON biçimine tam uymalısın. Türkçe konuş.`;
+  const current = modify
+    ? `# Mevcut program (bunu temel al; değiştirdiğin kısımlar dışında aynen koru)
+\`\`\`json
+${programForPrompt(PROGRAM)}
+\`\`\``
+    : "";
+  const flow = modify
+    ? `1. İstek açıksa doğrudan değiştir. Belirsizse en fazla 3 kısa soruyu TEK mesajda sor ve cevap bekle; bu aşamada JSON verme.
+2. Değişiklik ağrı, sakatlık ya da hastalıkla ilgiliyse riskli ve zorlayıcı hareketlerden kaçın, bunu güvenlik notuna yaz ve doktora ya da fizyoterapiste danışmasını öner. Tıbbi teşhis koyma.
+3. Sonunda neyi değiştirdiğini 2–4 kısa maddede yaz ve ardından programın TAMAMINI TEK bir \`\`\`json kod bloğunda ver.
+4. Kişi başka değişiklik isterse programın TAMAMINI aynı biçimde yeniden ver.`
+    : `1. Önce şunların bilinip bilinmediğini kontrol et: hedef; haftada kaç gün ve seans süresi; deneyim; salon, ev ya da ikisi; ağrı, sakatlık, ameliyat ya da hastalık; yapamadığı ya da sevmediği hareketler. Eksik olanları en fazla 5 kısa soru olarak TEK mesajda sor ve cevap bekle. Bu aşamada JSON verme.
+2. Ağrı, sakatlık ya da hastalık varsa riskli ve zorlayıcı hareketlerden kaçın, bunu güvenlik notuna yaz ve doktora ya da fizyoterapiste danışmasını öner. Tıbbi teşhis koyma.
+3. Bilgiler tamamlanınca programı hazırla. Cevabın 2–3 cümlelik kısa bir özet ve ardından TEK bir \`\`\`json kod bloğu olsun.
+4. Kişi değişiklik isterse programın TAMAMINI aynı biçimde yeniden ver.`;
   return `# Görev
-Deneyimli bir antrenörsün. Aşağıdaki kişi için haftalık bir spor ve postür programı hazırlayacaksın. Program "Postür & Spor" uygulamasına yüklenecek; bu yüzden sonunda aşağıdaki JSON biçimine tam uymalısın. Türkçe konuş.
+${task}
 
 # Kişinin isteği
-${req || "(Kişi bir şey yazmadı; ihtiyaçlarını sorarak öğren.)"}
-
-# Kişinin şu anki programı (değişiklik isterse bunu temel al)
-${programSummary(PROGRAM)}
-
+${req || (modify ? "(Kişi henüz yazmadı; neyi değiştirmek istediğini sor.)" : "(Kişi bir şey yazmadı; ihtiyaçlarını sorarak öğren.)")}
+${current ? `\n${current}\n` : ""}
 # Hareket kütüphanesi
 Bu hareketlerin uygulamada videosu ve geçmiş kayıtları var. Uygun olanlarda bu anahtarları ve adları AYNEN kullan; gerekiyorsa yeni hareket de ekleyebilirsin.
 ${exerciseLibrary()}
 
 # Çalışma şekli
-1. Önce şunların bilinip bilinmediğini kontrol et: hedef; haftada kaç gün ve seans süresi; deneyim; salon, ev ya da ikisi; ağrı, sakatlık, ameliyat ya da hastalık; yapamadığı ya da sevmediği hareketler. Eksik olanları en fazla 5 kısa soru olarak TEK mesajda sor ve cevap bekle. Bu aşamada JSON verme.
-2. Ağrı, sakatlık ya da hastalık varsa riskli ve zorlayıcı hareketlerden kaçın, bunu güvenlik notuna yaz ve doktora ya da fizyoterapiste danışmasını öner. Tıbbi teşhis koyma.
-3. Bilgiler tamamlanınca programı hazırla. Cevabın 2–3 cümlelik kısa bir özet ve ardından TEK bir \`\`\`json kod bloğu olsun.
-4. Kişi değişiklik isterse programın TAMAMINI aynı biçimde yeniden ver.
+${flow}
 
 # JSON biçimi (kesin kurallar)
 - Kök: "name" (program adı), "safetyNote" (güvenlik notu), "progression" ({"title", "items": [cümleler]}), "exercises" (hareketler), "days" (tam 7 gün, Pazartesi'den Pazar'a).
@@ -2003,12 +2058,21 @@ function aiDiff(next) {
   return parts.join(" · ");
 }
 
+// Değişen günlerin adları (değiştir modunda neyin değiştiğini göstermek için).
+function changedDays(next) {
+  if (!PROGRAM) return [];
+  const plan = (prog, d) => d && [d.rest, d.title, (d.items || []).map((it) => [prog.exercises[it.ex]?.name, it.sets, it.reps])];
+  const sig = (prog, d) => d && JSON.stringify([plan(prog, d), plan(prog, d.home)]);
+  return DAYS.filter((_, i) => sig(PROGRAM, PROGRAM.days[i]) !== sig(next, next.days[i]));
+}
+
 function aiPreview(p) {
   const list = (plan) => plan.rest
     ? h("ul", null, (plan.lines.length ? plan.lines : ["Dinlenme"]).map((l) => h("li", { text: l })))
     : h("ul", null, plan.items.map((it) => h("li", { text: `${p.exercises[it.ex].name} · ${it.sets > 1 ? `${it.sets} × ` : ""}${it.reps}` })));
   return [
     h("div", { class: "ai-summary", text: `${p.name} — ${aiDiff(p)}` }),
+    aiMode === "modify" && h("div", { text: changedDays(p).length ? `Değişen günler: ${changedDays(p).join(", ")}` : "Günlerde değişiklik yok; yalnızca notlar ya da açıklamalar değişmiş olabilir." }),
     p.safetyNote && h("div", { class: "ai-safety" }, h("strong", { text: "Güvenlik notu: " }), p.safetyNote),
     ...p.days.map((d, i) => h("div", null,
       h("h4", { text: `${DAYS[i]} · ${d.title}` }), list(d),
@@ -2024,14 +2088,50 @@ function aiShowStep(step) {
   saveAiDraft({ step });
   [1, 2, 3].forEach((n) => { $(`aiStep${n}`).hidden = n !== step; });
   $("aiStepLabel").textContent = `Adım ${step}/3`;
+  if (step === 1 && !$("aiModeBox").hidden && !aiMode) { aiModeRadios()[0].focus(); return; }
   const focus = { 1: "aiRequest", 2: "aiToPaste", 3: "aiOutput" }[step];
   $(focus)?.focus();
+}
+
+/* Değiştir / Yeni seçimi: önceden işaretli gelmez (GOV.UK). Programı olmayan kullanıcıda yalnızca "yeni". */
+let aiMode = null;
+const aiModeRadios = () => [...document.querySelectorAll("[data-ai-mode]")];
+
+const AI_MODE_TEXT = {
+  modify: { label: "Neyi değiştirmek istiyorsun? Kendi cümlelerinle yaz.", placeholder: "Ör. Çarşambayı ev antrenmanı yap, bacak hareketlerini azalt, plank süresini 45 sn'ye çıkar." },
+  new: { label: "Hedefin, haftada kaç gün ve kaç dakika, salon mu ev mi, ağrın ya da sakatlığın varsa kendi cümlelerinle yaz. Boş bırakırsan yapay zekâ sorar.",
+    placeholder: "Ör. Haftada 3 gün, 45 dakika salonda; boyun ağrım var, duruşumu düzeltmek istiyorum." }
+};
+
+function setAiMode(mode, { save = true } = {}) {
+  aiMode = mode;
+  aiModeRadios().forEach((b, i) => {
+    const on = b.dataset.aiMode === mode;
+    b.setAttribute("aria-checked", String(on));
+    b.tabIndex = on || (!mode && i === 0) ? 0 : -1; // hiçbiri seçili değilse ilk seçenek Tab ile odaklanır
+  });
+  const t = AI_MODE_TEXT[mode || "new"];
+  $("aiRequestLabel").textContent = t.label;
+  $("aiRequest").placeholder = t.placeholder;
+  if (mode) $("aiModeError").hidden = true;
+  if (save) saveAiDraft({ mode });
+}
+
+// Talimat üretmeden önce seçim yapılmış mı; yapılmadıysa uyarı ve odak.
+function aiModeReady() {
+  if (aiMode) return true;
+  $("aiModeError").hidden = false;
+  aiModeRadios()[0].focus();
+  return false;
 }
 
 function openAi() {
   if (!state.uid) return;
   if (!$("settingsModal").hidden) closeModal($("settingsModal"));
-  const d = aiDraft() || { step: 1, request: "", output: "" };
+  const d = aiDraft() || { step: 1, request: "", output: "", mode: null };
+  $("aiModeBox").hidden = !PROGRAM; // değiştirilecek program yoksa seçim de yok
+  $("aiModeError").hidden = true;
+  setAiMode(PROGRAM ? d.mode : "new", { save: false });
   $("aiRequest").value = d.request;
   $("aiOutput").value = d.output;
   $("aiManual").hidden = true;
@@ -2050,7 +2150,8 @@ function closeAi() {
 }
 
 async function aiCopy() {
-  const text = buildAiPrompt($("aiRequest").value);
+  if (!aiModeReady()) return;
+  const text = buildAiPrompt($("aiRequest").value, aiMode);
   saveAiDraft({ request: $("aiRequest").value });
   try {
     await navigator.clipboard.writeText(text);
@@ -2065,7 +2166,8 @@ async function aiCopy() {
 }
 
 async function aiShare() {
-  const text = buildAiPrompt($("aiRequest").value);
+  if (!aiModeReady()) return;
+  const text = buildAiPrompt($("aiRequest").value, aiMode);
   saveAiDraft({ request: $("aiRequest").value });
   try { await navigator.share({ text }); aiShowStep(2); }
   catch (e) { if (e?.name !== "AbortError") aiCopy(); }
@@ -2155,7 +2257,7 @@ async function refreshProgramSettings() {
   const when = ai && PROGRAM.createdAt ? ` · ${longDate(ymd(new Date(PROGRAM.createdAt)))}` : "";
   $("programInfo").textContent = PROGRAM
     ? `Şu anki program: ${PROGRAM.name || "Program"}${ai ? ` (yapay zekâyla hazırlandı${when})` : ""}.`
-    : "Henüz programın yok.";
+    : state.programState === "loading" ? "Program yükleniyor…" : "Henüz programın yok.";
   $("programTemplate").hidden = !(ai && state.assignedTemplate);
   $("programPrev").hidden = true;
   try { $("programPrev").hidden = !(await getDoc(programBackupRef())).exists(); } catch { /* çevrimdışı */ }
@@ -2171,6 +2273,7 @@ function initAi() {
   $("aiBack2").addEventListener("click", () => aiShowStep(1));
   $("aiBack3").addEventListener("click", () => aiShowStep(2));
   $("aiLoad").addEventListener("click", aiLoad);
+  aiModeRadios().forEach((b) => b.addEventListener("click", () => setAiMode(b.dataset.aiMode)));
   let t = null;
   $("aiRequest").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => saveAiDraft({ request: $("aiRequest").value }), 300); });
   $("aiOutput").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => aiCheck(false), 300); });
