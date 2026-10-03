@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, setPersistence, browserLocalPersistence,
-  onAuthStateChanged, signInWithEmailAndPassword, signOut
+  onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
@@ -34,7 +34,7 @@ let exerciseVideos = {};
 // Merkezi mapping önce, şablondaki `video` yedek. { id, start, title } döner; video yoksa null.
 function videoFor(exId) {
   const v = exerciseVideos[exId];
-  if (v?.id) return { id: v.id, start: v.start || 0, title: v.language === "tr" ? v.title : null };
+  if (v?.id) return { id: v.id, start: v.start || 0, title: v.language === "tr" ? v.title : null, language: v.language };
   return EX[exId]?.video ? { id: EX[exId].video, start: 0, title: null } : null;
 }
 
@@ -788,6 +788,7 @@ function exerciseCard(date, item, order, mode = "gym") {
   const name = item.name || lib.name;
   const altName = lib.alt && EX[lib.alt]?.name;
   const video = videoFor(item.ex);
+  const foreignVideo = video?.language && video.language !== "tr"; // dil bilinmiyorsa etiket yok
   const entry = state.docs[date]?.exercises[item.key];
   const setsData = () => ensureEntry(date, item, order).sets;
   const initial = entry ? entry.sets : Array.from({ length: item.sets }, () => ({ completed: false, weight: null }));
@@ -927,8 +928,9 @@ function exerciseCard(date, item, order, mode = "gym") {
           item.sets > 1 ? h("b", { text: `${item.sets} × ${item.reps}` }) : h("b", { text: item.reps }),
           item.hint && ` · ${item.hint}`
         ),
-        (altName || (home && !lib.cardio)) && h("div", { class: "ex-tags" },
+        (altName || (home && !lib.cardio) || foreignVideo) && h("div", { class: "ex-tags" },
           home && !lib.cardio && h("span", { class: "tag", text: "Vücut ağırlığı" }),
+          foreignVideo && h("span", { class: "tag", text: `${LANG_NAMES[video.language] || video.language.toUpperCase()} video` }),
           altName && h("span", { class: "tag alt", text: `${home ? "Salon" : "Ev"} alternatifi: ${altName}` })
         )
       )
@@ -1669,6 +1671,90 @@ function initConfirm() {
   $("confirmCancel").addEventListener("click", () => finishConfirm(false));
 }
 
+const LANG_NAMES = { en: "İngilizce", de: "Almanca", es: "İspanyolca", fr: "Fransızca" };
+
+/* ---------- Ayarlar sayfası: görünüm, dinlenme, veriler, hesap ---------- */
+
+function openSettings() {
+  $("restInfo").textContent = `Dinlenme süresi şu an ${fmtRest(timer.preset)}. Sayaçtaki ±15 sn ile değiştirebilirsin.`;
+  $("accountEmail").textContent = auth?.currentUser?.email ? `Giriş yapılan hesap: ${auth.currentUser.email}` : "";
+  $("accountEmail").hidden = !auth?.currentUser?.email;
+  const opts = [...document.querySelectorAll("[data-theme-opt]")];
+  openModal($("settingsModal"), { focus: opts.find((b) => b.getAttribute("aria-checked") === "true") });
+}
+
+const fmtRest = (s) => (s % 60 ? (s >= 60 ? `${Math.floor(s / 60)} dk ${s % 60} sn` : `${s} sn`) : `${s / 60} dk`);
+
+function initSettings() {
+  $("settingsBtn").addEventListener("click", openSettings);
+  $("settingsClose").addEventListener("click", () => closeModal($("settingsModal")));
+  $("exportCsv").addEventListener("click", () => exportWorkouts("csv"));
+  $("exportJson").addEventListener("click", () => exportWorkouts("json"));
+}
+
+/* ---------- Veri dışa aktarma (KVKK veri taşınabilirliği) ---------- */
+
+// Bütün kayıtlar sunucudan okunur; olmazsa cihazdaki son 90 gün aktarılır ve bu söylenir.
+async function allWorkouts() {
+  try {
+    const snap = await getDocs(query(collection(db, "users", state.uid, "workouts"), orderBy("date", "desc")));
+    const out = {};
+    for (const s of snap.docs) if (isDateKey(s.id)) out[s.id] = normalizeDoc(s.data(), s.id);
+    for (const date of pendingDates()) if (state.docs[date]) out[date] = state.docs[date]; // gönderilmemiş yerel kayıt öncelikli
+    return { docs: out, partial: false };
+  } catch {
+    return { docs: state.docs, partial: true };
+  }
+}
+
+function workoutsCsv(docs) {
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [["Tarih", "Gün", "Hareket", "Set", "Tamamlandı", "Ağırlık (kg)"].map(q).join(";")];
+  for (const d of Object.values(docs).sort((a, b) => (a.date < b.date ? 1 : -1))) {
+    for (const e of Object.values(d.exercises).sort((a, b) => a.order - b.order)) {
+      e.sets.forEach((s, i) => {
+        if (!s.completed && s.weight == null) return;
+        rows.push([d.date, dayName(d.date), e.name, i + 1, s.completed ? "Evet" : "Hayır",
+          s.weight == null ? "" : String(s.weight).replace(".", ",")].map(q).join(";"));
+      });
+    }
+  }
+  return "\uFEFF" + rows.join("\r\n"); // BOM + ";" + ondalık virgül: Türkçe Excel doğru açar
+}
+
+async function exportWorkouts(format) {
+  const btn = $(format === "csv" ? "exportCsv" : "exportJson");
+  btn.disabled = true;
+  try {
+    const { docs, partial } = await allWorkouts();
+    const list = Object.values(docs).filter((d) => countSets(d) > 0 || Object.values(d.exercises).some((e) => e.sets.some((s) => s.weight != null)));
+    if (!list.length) { toast("Dışa aktarılacak antrenman kaydı yok."); return; }
+    const name = `postur-spor-${ymd(new Date())}.${format}`;
+    const body = format === "csv"
+      ? workoutsCsv(Object.fromEntries(list.map((d) => [d.date, d])))
+      : JSON.stringify({ exportedAt: new Date().toISOString(), workouts: list.map((d) => ({ date: d.date, exercises: Object.values(d.exercises).map(({ touched, ...e }) => e) })) }, null, 2);
+    const file = new File([body], name, { type: format === "csv" ? "text/csv" : "application/json" });
+    await deliverFile(file);
+    toast(`${list.length} antrenman dışa aktarıldı${partial ? " (çevrimdışı: yalnızca cihazdaki son 90 gün)" : ""}.`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// iPhone'da paylaşım sayfası (Dosyalar'a kaydet, Mail…), diğerlerinde indirme.
+async function deliverFile(file) {
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: file.name }); return; }
+    catch (e) { if (e?.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = h("a", { href: url, download: file.name, hidden: true });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /* ---------- Görünüm (tema) seçimi ---------- */
 
 // "system" telefonun ayarını izler; "light" / "dark" <html data-theme> ile ezer (CSS'te iki blok).
@@ -1702,11 +1788,6 @@ function setTheme(theme) {
 
 function initTheme() {
   applyTheme(currentTheme());
-  $("themeBtn").addEventListener("click", () => {
-    const opts = [...document.querySelectorAll("[data-theme-opt]")];
-    openModal($("themeModal"), { focus: opts.find((b) => b.getAttribute("aria-checked") === "true") });
-  });
-  $("themeClose").addEventListener("click", () => closeModal($("themeModal")));
   document.querySelectorAll("[data-theme-opt]").forEach((b) =>
     b.addEventListener("click", () => setTheme(b.dataset.themeOpt)));
   // Sistem modunda telefon temayı değiştirince JS'te üretilen renkler de yenilensin.
@@ -1903,6 +1984,7 @@ function showLogin(message) {
   const err = $("loginError");
   err.hidden = !message;
   err.textContent = message || "";
+  if (message) $("loginInfo").hidden = true;
 }
 
 async function onSignedIn(user) {
@@ -1964,7 +2046,50 @@ function initFirebase() {
   }
 }
 
+function initPasswordToggle() {
+  $("pwToggle").addEventListener("click", () => {
+    const input = $("loginPassword");
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    $("pwToggle").textContent = show ? "Gizle" : "Göster";
+    $("pwToggle").setAttribute("aria-pressed", String(show));
+  });
+}
+
+// Hesabın var olup olmadığı açık edilmez: sonuç mesajı her durumda aynıdır.
+async function sendReset() {
+  const email = $("loginEmail").value.trim();
+  const info = $("loginInfo");
+  info.hidden = true;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    showLogin("Şifre sıfırlama bağlantısı için önce e-posta adresini yaz.");
+    $("loginEmail").focus();
+    return;
+  }
+  $("loginError").hidden = true;
+  const btn = $("forgotBtn");
+  btn.disabled = true;
+  try {
+    await sendPasswordResetEmail(auth, email);
+    info.textContent = "Bu adrese kayıtlı bir hesap varsa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et.";
+    info.hidden = false;
+  } catch (err) {
+    if (err?.code === "auth/user-not-found" || err?.code === "auth/invalid-email") {
+      info.textContent = "Bu adrese kayıtlı bir hesap varsa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et.";
+      info.hidden = false;
+    } else {
+      showLogin(err?.code === "auth/network-request-failed"
+        ? "Bağlantı gönderilemedi. İnternet bağlantını kontrol edip tekrar dene."
+        : "Bağlantı gönderilemedi. Biraz sonra tekrar dene.");
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function initLogin() {
+  initPasswordToggle();
+  $("forgotBtn").addEventListener("click", sendReset);
   $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!configured) return;
@@ -1978,6 +2103,9 @@ function initLogin() {
       await setPersistence(auth, browserLocalPersistence);
       await signInWithEmailAndPassword(auth, email, password);
       $("loginPassword").value = "";
+      $("loginPassword").type = "password"; // "Göster" açık kaldıysa bir sonraki girişte gizli başlasın
+      $("pwToggle").textContent = "Göster";
+      $("pwToggle").setAttribute("aria-pressed", "false");
     } catch (err) {
       showLogin(authMessage(err.code));
     } finally {
@@ -2046,6 +2174,7 @@ function boot() {
   initToast();
   initConfirm();
   initTheme();
+  initSettings();
   initRadioKeys();
   initModal();
   initVideoImport();
