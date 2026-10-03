@@ -1410,6 +1410,50 @@ function initConfirm() {
   $("confirmCancel").addEventListener("click", () => finishConfirm(false));
 }
 
+/* ---------- Görünüm (tema) seçimi ---------- */
+
+// "system" telefonun ayarını izler; "light" / "dark" <html data-theme> ile ezer (CSS'te iki blok).
+// Seçim cihaza özeldir (localStorage). İlk boyamadaki uygulama index.html'deki satır içi betikte.
+const THEME_COLORS = { light: "#f5f7fb", dark: "#000000" };
+
+function currentTheme() {
+  const t = lsGet("postur-theme");
+  return t === "light" || t === "dark" ? t : "system";
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === "system") delete root.dataset.theme; else root.dataset.theme = theme;
+  // Durum çubuğu rengi: seçim varsa iki meta da ona, yoksa her biri kendi media sorgusuna göre.
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    const own = m.media.includes("dark") ? "dark" : "light";
+    m.content = THEME_COLORS[theme === "system" ? own : theme];
+  });
+  document.querySelectorAll("[data-theme-opt]").forEach((b) =>
+    b.setAttribute("aria-checked", String(b.dataset.themeOpt === theme)));
+}
+
+function setTheme(theme) {
+  if (theme === "system") lsDel("postur-theme"); else lsSet("postur-theme", theme);
+  applyTheme(theme);
+  if (state.uid) renderCurrent(); // video yer tutucusu gibi JS'te üretilen renkler yenilensin
+}
+
+function initTheme() {
+  applyTheme(currentTheme());
+  $("themeBtn").addEventListener("click", () => {
+    const opts = [...document.querySelectorAll("[data-theme-opt]")];
+    openModal($("themeModal"), { focus: opts.find((b) => b.getAttribute("aria-checked") === "true") });
+  });
+  $("themeClose").addEventListener("click", () => closeModal($("themeModal")));
+  document.querySelectorAll("[data-theme-opt]").forEach((b) =>
+    b.addEventListener("click", () => setTheme(b.dataset.themeOpt)));
+  // Sistem modunda telefon temayı değiştirince JS'te üretilen renkler de yenilensin.
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+    if (currentTheme() === "system" && state.uid) renderCurrent();
+  });
+}
+
 /* ============================================================
    VİDEO MODALI (iframe yalnızca kullanıcı tıklayınca oluşturulur)
    ============================================================ */
@@ -1683,6 +1727,7 @@ function boot() {
   initModals();
   initToast();
   initConfirm();
+  initTheme();
   initModal();
   initVideoImport();
   initLifecycle();

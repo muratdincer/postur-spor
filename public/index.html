@@ -14,6 +14,16 @@
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
+  <!-- Görünüm seçimi ilk boyamadan önce uygulanır (açık/koyu arasında yanıp sönme olmasın). -->
+  <script>
+    try {
+      var t = localStorage.getItem("postur-theme");
+      if (t === "light" || t === "dark") {
+        document.documentElement.dataset.theme = t;
+        document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.content = t === "dark" ? "#000000" : "#f5f7fb"; });
+      }
+    } catch (e) { /* özel mod vb. */ }
+  </script>
 </head>
 <body>
 
@@ -43,6 +53,9 @@
       <div class="topbar-row">
         <h1 class="app-title">Postür &amp; Spor</h1>
         <span id="saveStatus" class="save-status" data-state="idle" aria-live="polite"></span>
+        <button id="themeBtn" class="btn btn-ghost icon-btn" type="button" aria-label="Görünüm" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+        </button>
         <button id="logoutBtn" class="btn btn-ghost" type="button">Çıkış yap</button>
       </div>
       <div id="offlineBanner" class="offline-banner" role="status" hidden>
@@ -125,6 +138,22 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden>
       <span id="toastMsg" class="toast-msg"></span>
       <button id="toastAction" type="button" class="btn btn-ghost" hidden></button>
+    </div>
+
+    <!-- GÖRÜNÜM -->
+    <div id="themeModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="themeTitle" hidden>
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h2 id="themeTitle">Görünüm</h2>
+          <button id="themeClose" type="button" class="btn btn-ghost">Kapat</button>
+        </div>
+        <div class="segmented theme-seg" role="radiogroup" aria-labelledby="themeTitle">
+          <button type="button" class="seg-btn" role="radio" data-theme-opt="system" aria-checked="true">Sistem</button>
+          <button type="button" class="seg-btn" role="radio" data-theme-opt="light" aria-checked="false">Açık</button>
+          <button type="button" class="seg-btn" role="radio" data-theme-opt="dark" aria-checked="false">Koyu</button>
+        </div>
+        <p class="modal-text">Sistem, telefonunun açık ya da koyu mod ayarını izler.</p>
+      </div>
     </div>
 
     <!-- ONAY -->
