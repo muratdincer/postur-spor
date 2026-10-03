@@ -107,6 +107,10 @@
           <button type="button" class="chip" data-preset="120">120 sn</button>
         </div>
       </div>
+      <div class="timer-adjust" role="group" aria-label="Süreyi ayarla">
+        <button type="button" class="chip" data-adjust="-15" aria-label="15 saniye azalt">−15 sn</button>
+        <button type="button" class="chip" data-adjust="15" aria-label="15 saniye ekle">+15 sn</button>
+      </div>
       <div class="timer-actions">
         <button id="timerToggle" type="button" class="btn btn-primary">Başlat</button>
         <button id="timerReset" type="button" class="btn">Sıfırla</button>
@@ -114,7 +118,7 @@
       </div>
       <label class="check-row">
         <input id="autoTimer" type="checkbox">
-        <span>Set bitince 90 sn dinlenmeyi otomatik başlat</span>
+        <span>Set bitince dinlenmeyi otomatik başlat</span>
       </label>
     </section>
     <!-- SÜRELİ HAREKET SAYACI (tam ekran) -->
@@ -135,6 +139,9 @@
     </div>
     <button id="timerFab" type="button" class="timer-fab" aria-label="Dinlenme sayacını aç"><span aria-hidden="true">⏱</span></button>
 
+    <!-- Ekran okuyucu duyuruları (sayaç bitişi vb.) -->
+    <div id="srAnnounce" class="sr-only" role="status" aria-live="polite"></div>
+
     <!-- KISA BİLDİRİM -->
     <div id="toast" class="toast" role="status" aria-live="polite" hidden>
       <span id="toastMsg" class="toast-msg"></span>
@@ -148,7 +155,7 @@
           <h2 id="themeTitle">Görünüm</h2>
           <button id="themeClose" type="button" class="btn btn-ghost">Kapat</button>
         </div>
-        <div class="segmented theme-seg" role="radiogroup" aria-labelledby="themeTitle">
+        <div class="segmented theme-seg" role="radiogroup" aria-labelledby="themeTitle" data-rg="theme">
           <button type="button" class="seg-btn" role="radio" data-theme-opt="system" aria-checked="true">Sistem</button>
           <button type="button" class="seg-btn" role="radio" data-theme-opt="light" aria-checked="false">Açık</button>
           <button type="button" class="seg-btn" role="radio" data-theme-opt="dark" aria-checked="false">Koyu</button>
