@@ -151,6 +151,8 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
+/* Görünmez, ekran okuyucuya açık */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 html { -webkit-text-size-adjust: 100%; }
 /* iOS: kök yazı boyutu Ayarlar > Ekran > Metin Boyutu'nu izler (varsayılan 17px). */
@@ -393,6 +395,8 @@ h1, h2, h3, p { margin: 0; }
   background: var(--btn-bg); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; color: var(--text);
 }
 .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.timer-adjust { display: flex; gap: var(--sp-2); }
+.timer-adjust .chip { flex: 1; }
 .timer-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .timer-actions .btn { flex: 1; }
 .check-row { display: flex; gap: 10px; align-items: center; font-size: var(--fs-sm); color: var(--muted); min-height: var(--tap); cursor: pointer; }

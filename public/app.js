@@ -672,9 +672,9 @@ function setMode(mode) {
 function modeSwitch() {
   const opt = (mode, label) => h("button", {
     type: "button", role: "radio", class: "seg-btn", "aria-checked": String(state.mode === mode),
-    text: label, onclick: () => setMode(mode)
+    tabindex: state.mode === mode ? "0" : "-1", text: label, onclick: () => setMode(mode)
   });
-  return h("div", { class: "segmented", role: "radiogroup", "aria-label": "Antrenman yeri" },
+  return h("div", { class: "segmented", role: "radiogroup", "aria-label": "Antrenman yeri", "data-rg": "mode" },
     opt("gym", "Salon"), opt("home", "Evde"));
 }
 
@@ -864,7 +864,7 @@ function exerciseCard(date, item, order, mode = "gym") {
       }
       btn.setAttribute("aria-checked", String(cur.completed));
       saveNow(date);
-      if (cur.completed && $("autoTimer").checked) timerStart(90);
+      if (cur.completed && $("autoTimer").checked) timerStart(timer.preset);
       // Yalnızca kullanıcı bir seti işaretleyip hareketin tüm setleri bittiğinde ilerle (geri almada kaydırma yok).
       if (cur.completed && e.sets.every((x) => x.completed)) onExerciseDone(btn.closest(".ex"), date);
       else refreshDayDone(date);
@@ -1146,7 +1146,18 @@ function showView(name) {
    DİNLENME SAYACI
    ============================================================ */
 
-const timer = { preset: 90, remaining: 90, running: false, endAt: 0, iv: null };
+// Dinlenme süresi cihazda saklanır; hazır süreler ya da ±15 sn ile ayarlanan özel süre (15 sn – 10 dk).
+const REST_MIN = 15, REST_MAX = 600;
+const savedRest = Number(lsGet("postur-rest"));
+const restPreset = Number.isInteger(savedRest) && savedRest >= REST_MIN && savedRest <= REST_MAX ? savedRest : 90;
+const timer = { preset: restPreset, remaining: restPreset, running: false, endAt: 0, iv: null };
+
+// Ekran okuyucuya kısa duyuru (her saniye değil; yalnızca önemli anlar).
+function announce(msg) {
+  const el = $("srAnnounce");
+  el.textContent = "";
+  requestAnimationFrame(() => { el.textContent = msg; });
+}
 
 const fmtTime = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
 
@@ -1162,6 +1173,7 @@ function timerTick() {
   timer.remaining = Math.max(0, Math.ceil((timer.endAt - Date.now()) / 1000));
   if (timer.remaining === 0) {
     timerStop();
+    announce("Dinlenme bitti.");
     beep(2);
     try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
   }
@@ -1172,6 +1184,7 @@ function timerStop() {
   clearInterval(timer.iv);
   timer.iv = null;
   timer.running = false;
+  keepAwake("rest", false);
 }
 
 function timerOpen() {
@@ -1188,6 +1201,7 @@ function timerStart(preset) {
   timer.endAt = Date.now() + timer.remaining * 1000;
   timer.running = true;
   timer.iv = setInterval(timerTick, 250);
+  keepAwake("rest", true);
   timerRender();
 }
 
@@ -1195,6 +1209,25 @@ function timerPause() {
   if (timer.running) timer.remaining = Math.max(0, Math.ceil((timer.endAt - Date.now()) / 1000));
   timerStop();
   timerRender();
+}
+
+function setRestPreset(sec) {
+  timer.preset = Math.min(REST_MAX, Math.max(REST_MIN, sec));
+  lsSet("postur-rest", String(timer.preset));
+  timerReset();
+}
+
+// Çalışırken yalnızca kalan süre değişir; dururken varsayılan dinlenme süresi değişir.
+function timerAdjust(delta) {
+  if (timer.running) {
+    timer.endAt = Math.max(Date.now() + 1000, timer.endAt + delta * 1000);
+    timerTick();
+  } else if (timer.remaining > 0 && timer.remaining < timer.preset) {
+    timer.remaining = Math.max(1, timer.remaining + delta);
+    timerRender();
+  } else {
+    setRestPreset(timer.preset + delta);
+  }
 }
 
 function timerReset() {
@@ -1213,10 +1246,9 @@ function initTimer() {
   });
   $("timerFab").addEventListener("click", timerOpen);
   document.querySelectorAll("#timer [data-preset]").forEach((b) =>
-    b.addEventListener("click", () => {
-      timer.preset = Number(b.dataset.preset);
-      timerReset();
-    }));
+    b.addEventListener("click", () => setRestPreset(Number(b.dataset.preset))));
+  document.querySelectorAll("#timer [data-adjust]").forEach((b) =>
+    b.addEventListener("click", () => timerAdjust(Number(b.dataset.adjust))));
   $("autoTimer").checked = lsGet("postur-auto-timer") === "1";
   $("autoTimer").addEventListener("change", (e) => lsSet("postur-auto-timer", e.target.checked ? "1" : "0"));
   $("timerFab").hidden = false;
@@ -1296,7 +1328,7 @@ function workToggle(key, duration, btn, chk, done, info) {
   $("workSet").textContent = info.set;
   openModal($("workScreen"), { close: workCancel, focus: $("workPause"), returnFocus: btn });
   work.iv = setInterval(workTick, 250);
-  keepAwake(true);
+  keepAwake("work", true);
   workRender();
 }
 
@@ -1304,7 +1336,7 @@ function workTick() {
   if (!work.key || work.paused) return;
   const left = Math.ceil((work.endAt - Date.now()) / 1000);
   if (left <= 0) { workFinish(); return; }
-  if (!work.go && left <= work.total) { work.go = true; work.lastBeep = left; beep(1); }
+  if (!work.go && left <= work.total) { work.go = true; work.lastBeep = left; beep(1); announce("Başla."); }
   else if (work.go && left <= 3 && left !== work.lastBeep) { work.lastBeep = left; beep(1, 0.08); } // son 3 sn
   workRender();
 }
@@ -1329,7 +1361,7 @@ function workCancel() {
   const focusBack = work.btn?.isConnected ? work.btn : null;
   Object.assign(work, { key: null, iv: null, btn: null, chk: null, done: null, paused: false });
   closeModal($("workScreen"), focusBack);
-  keepAwake(false);
+  keepAwake("work", false);
 }
 
 function initWork() {
@@ -1340,6 +1372,7 @@ function initWork() {
 function workFinish() {
   const { chk, done } = work;
   workCancel();
+  announce("Süre doldu, set tamamlandı.");
   beep(3);
   try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
   // Ekrandaki ✓ düğmesine basılmış gibi: kayıt, otomatik dinlenme ve sonraki harekete geçiş aynı yoldan.
@@ -1374,13 +1407,16 @@ function beep(n, len = 0.2) {
 }
 
 // Süreli set sürerken ekran kararmasın (destekleyen tarayıcılarda).
+// Süreli set ya da dinlenme sayacı çalışırken ekran kararmasın. Nedenlerden biri sürdükçe kilit tutulur.
 let wakeSentinel = null;
-async function keepAwake(on) {
-  if (!on) { wakeSentinel?.release().catch(() => {}); wakeSentinel = null; return; }
+const wakeReasons = new Set();
+async function keepAwake(reason, on) {
+  if (reason) { if (on) wakeReasons.add(reason); else wakeReasons.delete(reason); }
+  if (!wakeReasons.size) { wakeSentinel?.release().catch(() => {}); wakeSentinel = null; return; }
   if (wakeSentinel || !navigator.wakeLock) return;
   try {
     const s = await navigator.wakeLock.request("screen");
-    if (!work.key) { s.release().catch(() => {}); return; }
+    if (!wakeReasons.size) { s.release().catch(() => {}); return; }
     wakeSentinel = s;
     s.addEventListener("release", () => { if (wakeSentinel === s) wakeSentinel = null; });
   } catch { /* izin yok / desteklenmiyor */ }
@@ -1434,6 +1470,28 @@ function initModals() {
     if (e.target !== el) return;
     modalStack.find((m) => m.el === el)?.close();
   }));
+}
+
+/* ---------- Radio grupları: ok tuşlarıyla seçim (WAI-ARIA APG) ---------- */
+
+// Grupta yalnızca seçili seçenek Tab ile odaklanır; oklar, Home ve End seçimi değiştirir.
+// Seçim grubu yeniden çizebildiği için (Salon/Evde) odak data-rg ile yeni öğede bulunur.
+function initRadioKeys() {
+  document.addEventListener("keydown", (e) => {
+    const radio = e.target.closest?.('[role="radio"]');
+    const group = radio?.closest('[role="radiogroup"][data-rg]');
+    if (!group) return;
+    const list = [...group.querySelectorAll('[role="radio"]')];
+    const i = list.indexOf(radio);
+    const next = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: list.length - 1 }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    const n = (next + list.length) % list.length;
+    const id = group.dataset.rg;
+    list[n].click();
+    const target = document.querySelector(`[data-rg="${id}"]`)?.querySelectorAll('[role="radio"]')[n];
+    target?.focus();
+  });
 }
 
 /* ---------- Kısa bildirim (toast) ---------- */
@@ -1517,8 +1575,10 @@ function applyTheme(theme) {
     const own = m.media.includes("dark") ? "dark" : "light";
     m.content = THEME_COLORS[theme === "system" ? own : theme];
   });
-  document.querySelectorAll("[data-theme-opt]").forEach((b) =>
-    b.setAttribute("aria-checked", String(b.dataset.themeOpt === theme)));
+  document.querySelectorAll("[data-theme-opt]").forEach((b) => {
+    b.setAttribute("aria-checked", String(b.dataset.themeOpt === theme));
+    b.tabIndex = b.dataset.themeOpt === theme ? 0 : -1;
+  });
 }
 
 function setTheme(theme) {
@@ -1834,7 +1894,8 @@ function initLifecycle() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (timer.running) timerTick();
-    if (work.key) { workTick(); keepAwake(true); }
+    if (work.key) workTick();
+    keepAwake(); // sekme gizlenince tarayıcı kilidi bırakır; neden sürüyorsa yeniden al
     const today = ymd(new Date());
     if (state.uid && today !== state.loadedToday) {
       state.loadedToday = today;
@@ -1867,6 +1928,7 @@ function boot() {
   initToast();
   initConfirm();
   initTheme();
+  initRadioKeys();
   initModal();
   initVideoImport();
   initLifecycle();
