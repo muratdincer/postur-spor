@@ -99,3 +99,29 @@ async function shell(event) {
   if (nav) cacheClients.delete(event.resultingClientId);
   return winner;
 }
+
+// Bildirim (Web Push): scripts/push.mjs { title, body, url, tag } gönderir. iOS'ta her push görünür bir
+// bildirim göstermek zorunda; göstermeyen uygulamanın aboneliği iptal edilebilir.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() }; }
+  event.waitUntil(self.registration.showNotification(data.title || "Postür & Spor", {
+    body: data.body || "",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: data.tag || undefined,
+    data: { url: data.url || "/" }
+  }));
+});
+
+// Bildirime dokununca açık uygulama öne gelir, yoksa açılır.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const open = all.find((c) => new URL(c.url).origin === self.location.origin);
+    if (open) { await open.focus(); if (open.url !== url && "navigate" in open) await open.navigate(url).catch(() => {}); return; }
+    await self.clients.openWindow(url);
+  })());
+});

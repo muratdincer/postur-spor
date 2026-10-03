@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, setDoc, getDoc, getDocs, collection, query, where, orderBy, limit,
+  doc, setDoc, getDoc, getDocs, deleteDoc, collection, query, where, orderBy, limit,
   getCountFromServer, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -1680,6 +1680,141 @@ function initConfirm() {
 
 const LANG_NAMES = { en: "İngilizce", de: "Almanca", es: "İspanyolca", fr: "Fransızca" };
 
+/* ============================================================
+   BİLDİRİMLER (Web Push)
+   iOS 16.4+ yalnızca ana ekrana eklenmiş uygulamada çalışır. Cihazın abonelik bilgisi
+   users/{uid}/pushSubs/{id} altına yazılır; gönderimi GitHub Actions (scripts/push.mjs) yapar.
+   Açık anahtar config/push dokümanından okunur (gizli anahtar istemciye hiç gelmez).
+   ============================================================ */
+
+const pushSubRef = (id) => doc(db, "users", state.uid, "pushSubs", id);
+let pushPublicKey = null;
+let pushBusy = false;
+
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+
+function b64urlToBytes(s) {
+  const b = atob((s + "=".repeat((4 - (s.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(b, (c) => c.charCodeAt(0));
+}
+
+// Doküman kimliği: uç noktanın özeti (aynı cihaz tekrar kaydolunca aynı doküman güncellenir).
+async function endpointId(endpoint) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
+  return [...new Uint8Array(hash)].slice(0, 16).map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function currentPushSub() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+async function loadPushKey() {
+  if (pushPublicKey) return pushPublicKey;
+  try {
+    const snap = await getDoc(doc(db, "config", "push"));
+    pushPublicKey = snap.exists() ? snap.data().publicKey || null : null;
+  } catch { pushPublicKey = null; }
+  return pushPublicKey;
+}
+
+// Ayarlardaki bildirim bölümünü cihazın durumuna göre gösterir.
+async function refreshPushSettings() {
+  const info = $("pushInfo"), on = $("pushOn"), off = $("pushOff"), test = $("pushTest");
+  const show = (text, { enable = false, sub = false } = {}) => {
+    info.textContent = text;
+    on.hidden = !enable;
+    off.hidden = !sub;
+    test.hidden = !sub;
+  };
+  if (!pushSupported()) {
+    show(isIos() && !isStandalone()
+      ? "Bildirimler için uygulamayı Safari'de Paylaş > Ana Ekrana Ekle ile ekleyip ana ekrandan aç."
+      : "Bu tarayıcı bildirimleri desteklemiyor. iPhone'da iOS 16.4 ya da üstü gerekir.");
+    return;
+  }
+  if (Notification.permission === "denied") {
+    show("Bildirim izni kapalı. iPhone'da Ayarlar > Bildirimler > Postür & Spor'dan açabilirsin.");
+    return;
+  }
+  const sub = await currentPushSub().catch(() => null);
+  if (sub && Notification.permission === "granted") {
+    show("Bu cihaz bildirim alıyor.", { sub: true });
+    saveSubscription(sub).catch(() => {}); // kayıt silinmiş ya da başka hesaba aitse yeniden yaz
+    return;
+  }
+  show("Antrenman hatırlatmaları gibi bildirimleri bu cihazda almak için aç. Uygulama kapalıyken de gelir.", { enable: true });
+  loadPushKey();
+}
+
+async function saveSubscription(sub) {
+  const json = sub.toJSON();
+  await setDoc(pushSubRef(await endpointId(json.endpoint)), {
+    endpoint: json.endpoint, keys: json.keys, createdAt: serverTimestamp(),
+    device: isIos() ? "iPhone/iPad" : (navigator.userAgentData?.platform || "Tarayıcı")
+  });
+}
+
+// İzin isteği dokunuşun içinde, ilk await'ten önce yapılır (iOS yalnızca kullanıcı dokunuşuyla izin sorar).
+async function enablePush() {
+  if (pushBusy) return;
+  pushBusy = true;
+  $("pushOn").disabled = true;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      toast(permission === "denied" ? "Bildirim izni verilmedi." : "Bildirim izni sorulamadı. Tekrar dene.");
+      return;
+    }
+    const key = await loadPushKey();
+    if (!key) { toast("Bildirim sunucusu henüz hazır değil. Biraz sonra tekrar dene."); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToBytes(key) });
+    await saveSubscription(sub);
+    toast("Bildirimler açıldı.");
+  } catch (err) {
+    console.error("Bildirim aboneliği:", err);
+    toast("Bildirimler açılamadı. İnternet bağlantını kontrol edip tekrar dene.");
+  } finally {
+    pushBusy = false;
+    $("pushOn").disabled = false;
+    refreshPushSettings();
+  }
+}
+
+async function disablePush({ quiet = false } = {}) {
+  try {
+    const sub = await currentPushSub();
+    if (!sub) return;
+    const id = await endpointId(sub.endpoint);
+    await sub.unsubscribe();
+    if (state.uid) await deleteDoc(pushSubRef(id)).catch(() => {});
+    if (!quiet) toast("Bu cihazda bildirimler kapatıldı.");
+  } catch (err) {
+    console.error(err);
+    if (!quiet) toast("Bildirimler kapatılamadı. Tekrar dene.");
+  } finally {
+    if (!quiet) refreshPushSettings();
+  }
+}
+
+// İzin ve gösterim bu cihazda çalışıyor mu: sunucuya gitmeden yerel bir bildirim gösterir.
+async function testPushLocal() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification("Postür & Spor", { body: "Bildirimler bu cihazda çalışıyor.", icon: "/icons/icon-192.png", tag: "test" });
+  } catch { toast("Deneme bildirimi gösterilemedi."); }
+}
+
+function initPush() {
+  $("pushOn").addEventListener("click", enablePush);
+  $("pushOff").addEventListener("click", () => disablePush());
+  $("pushTest").addEventListener("click", testPushLocal);
+}
+
 /* ---------- Ayarlar sayfası: görünüm, dinlenme, veriler, hesap ---------- */
 
 function openSettings() {
@@ -1687,6 +1822,7 @@ function openSettings() {
   $("accountEmail").textContent = auth?.currentUser?.email ? `Giriş yapılan hesap: ${auth.currentUser.email}` : "";
   $("accountEmail").hidden = !auth?.currentUser?.email;
   refreshProgramSettings();
+  refreshPushSettings();
   if (!exportFile) resetExport();
   const opts = [...document.querySelectorAll("[data-theme-opt]")];
   openModal($("settingsModal"), { focus: opts.find((b) => b.getAttribute("aria-checked") === "true") });
@@ -2649,6 +2785,7 @@ function initLogin() {
     if (!ok) return;
     // Bekleyen (debounce'taki) kayıtlar çıkıştan önce gönderilir; yoksa onSignedOut onları siler.
     await Promise.all(Object.keys(debounceTimers).filter((d) => state.docs[d]).map((d) => saveNow(d)));
+    await disablePush({ quiet: true }); // çıkış yapılan hesabın bildirimleri bu cihaza gelmesin
     try { await signOut(auth); } catch (err) { console.error(err); toast("Çıkış yapılamadı. Tekrar dene."); }
   });
 }
@@ -2702,6 +2839,7 @@ function boot() {
   initConfirm();
   initTheme();
   initSettings();
+  initPush();
   initAi();
   initRadioKeys();
   initModal();

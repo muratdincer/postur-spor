@@ -1,0 +1,51 @@
+name: Bildirim gönder
+
+# Elle tetiklenir: Actions > "Bildirim gönder" > Run workflow.
+# İlk çalıştırmada bildirim anahtarlarını üretip Firestore'a yazar (cihaz yoksa yalnızca bunu yapar).
+# Gerekli secret: FIREBASE_SERVICE_ACCOUNT ("Cloud Datastore User" rolü yeterli).
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Kime: latest = son kaydolan cihaz, all = bütün cihazlar"
+        type: choice
+        options: [latest, all]
+        default: latest
+      title:
+        description: "Başlık"
+        default: "Postür & Spor"
+      body:
+        description: "Metin"
+        default: "Deneme bildirimi: bildirimler çalışıyor."
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Bağımlılıklar
+        run: npm install --no-save --no-audit --no-fund --prefix scripts firebase-admin@12 web-push@3
+
+      - name: Gönder
+        env:
+          TARGET: ${{ inputs.target }}
+          TITLE: ${{ inputs.title }}
+          BODY: ${{ inputs.body }}
+        run: node scripts/push.mjs
