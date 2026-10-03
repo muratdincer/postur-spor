@@ -175,6 +175,17 @@
           <p id="restInfo" class="modal-text"></p>
         </section>
 
+        <section class="settings-sec" aria-labelledby="programTitle">
+          <h3 id="programTitle">Program</h3>
+          <p id="programInfo" class="modal-text"></p>
+          <button id="aiOpen" type="button" class="btn btn-primary btn-block">Yapay zekâ ile içe aktar</button>
+          <p class="modal-text">Kendi yapay zekâ hesabınla (ChatGPT, Claude, Gemini…) programını hazırlatıp buraya yükle.</p>
+          <div class="settings-row">
+            <button id="programPrev" type="button" class="btn" hidden>Önceki programa dön</button>
+            <button id="programTemplate" type="button" class="btn" hidden>Hazır programa dön</button>
+          </div>
+        </section>
+
         <section class="settings-sec" aria-labelledby="dataTitle">
           <h3 id="dataTitle">Verilerin</h3>
           <p class="modal-text">Bütün antrenman kayıtlarını indir ya da paylaş.</p>
@@ -191,6 +202,52 @@
         </section>
 
         <p class="modal-text settings-note">Görünüm ve dinlenme ayarları bu cihazda saklanır; antrenman kayıtların hesabında.</p>
+      </div>
+    </div>
+
+    <!-- YAPAY ZEKÂ İLE PROGRAM (kullanıcının kendi yapay zekâ hesabıyla, kopyala-yapıştır) -->
+    <div id="aiModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="aiTitle" hidden>
+      <div class="modal-sheet ai-sheet">
+        <div class="modal-head">
+          <h2 id="aiTitle">Yapay zekâ ile program</h2>
+          <button id="aiClose" type="button" class="btn btn-ghost">Kapat</button>
+        </div>
+        <p id="aiStepLabel" class="ai-step"></p>
+
+        <section id="aiStep1" class="ai-sec" aria-labelledby="aiStep1Title">
+          <h3 id="aiStep1Title">İsteğini yaz</h3>
+          <label for="aiRequest" class="modal-text">Hedefin, haftada kaç gün ve kaç dakika, salon mu ev mi, ağrın ya da sakatlığın varsa kendi cümlelerinle yaz. Boş bırakırsan yapay zekâ sorar.</label>
+          <textarea id="aiRequest" class="import-text ai-text" rows="5" placeholder="Ör. Haftada 3 gün, 45 dakika salonda; boyun ağrım var, duruşumu düzeltmek istiyorum."></textarea>
+          <p class="modal-text ai-privacy">Adını, e-postanı ya da kimlik bilgini yazma. Talimat, kullandığın yapay zekâ servisine gider ve o servisin kurallarına tabidir.</p>
+          <button id="aiCopy" type="button" class="btn btn-primary btn-block">Talimatı kopyala</button>
+          <button id="aiShare" type="button" class="btn btn-block" hidden>Yapay zekâ uygulamasına gönder</button>
+          <div id="aiManual" hidden>
+            <p class="form-error">Otomatik kopyalanamadı. Aşağıdaki metnin tamamını seçip kopyala.</p>
+            <textarea id="aiPromptText" class="import-text" rows="6" readonly aria-label="Talimat metni"></textarea>
+          </div>
+        </section>
+
+        <section id="aiStep2" class="ai-sec" aria-labelledby="aiStep2Title" hidden>
+          <h3 id="aiStep2Title">Yapay zekâda devam et</h3>
+          <ol class="ai-howto">
+            <li>ChatGPT, Claude, Gemini ya da kullandığın yapay zekâyı aç ve yeni bir sohbete talimatı yapıştır.</li>
+            <li>Soru sorarsa orada cevapla. Değişiklik istersen yine orada söyle.</li>
+            <li>En sonda sana bir kod bloğu (JSON) verecek. Cevabın tamamını kopyala ve buraya dön.</li>
+          </ol>
+          <button id="aiToPaste" type="button" class="btn btn-primary btn-block">Planı yapıştırmaya geç</button>
+          <button id="aiCopyAgain" type="button" class="btn btn-block">Talimatı yeniden kopyala</button>
+          <button id="aiBack2" type="button" class="btn btn-ghost btn-block">Geri</button>
+        </section>
+
+        <section id="aiStep3" class="ai-sec" aria-labelledby="aiStep3Title" hidden>
+          <h3 id="aiStep3Title">Planı yapıştır</h3>
+          <label for="aiOutput" class="modal-text">Yapay zekânın son cevabını buraya yapıştır; uygulama içindeki planı bulup kontrol eder.</label>
+          <textarea id="aiOutput" class="import-text" rows="6" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+          <div id="aiError" class="form-error" role="alert" hidden></div>
+          <div id="aiPreview" class="ai-preview" role="region" aria-label="Program önizlemesi" hidden></div>
+          <button id="aiLoad" type="button" class="btn btn-primary btn-block">Programı yükle</button>
+          <button id="aiBack3" type="button" class="btn btn-ghost btn-block">Geri</button>
+        </section>
       </div>
     </div>
 

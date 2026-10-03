@@ -417,7 +417,8 @@ function checkVideos(obj) {
   }
   return { items, errors };
 }
-const PROGRAM_FIELDS = ["id", "version", "name", "safetyNote", "progression", "exercises", "days"];
+// source: "ai" → kullanıcının yapay zekâyla hazırlayıp onayladığı program (atanmış şablon bunu ezmez).
+const PROGRAM_FIELDS = ["id", "version", "name", "safetyNote", "progression", "exercises", "days", "source", "createdAt"];
 
 function validDay(d) {
   return d && (d.rest || (Array.isArray(d.items) && d.items.every((it) =>
@@ -486,6 +487,7 @@ async function loadProgram() {
     if (!snap.exists()) throw new Error("config/assignments yok");
     const a = snap.data();
     assignedId = a.users?.[state.uid] || null;
+    state.assignedTemplate = assignedId;
     // Programı henüz olmayan ama zaten kayıtları bulunan (bu özellikten önceki) kullanıcıya varsayılan şablon.
     if (!assignedId && storedOk && !stored && a.existingUsersDefault &&
         (Object.keys(state.docs).length > 0 || hasLegacyLocal())) {
@@ -496,6 +498,9 @@ async function loadProgram() {
   }
   // Açık atama yoksa kullanıcının mevcut şablonu kalır; şablonun yeni sürümü varsa güncellenir.
   if (!assignedId && storedOk && typeof stored?.id === "string") assignedId = stored.id;
+
+  // Kullanıcının onayladığı yapay zekâ programı şablonla ezilmez; şablona Ayarlar > "Hazır programa dön" ile geçilir.
+  if (stored?.source === "ai" && validProgram(stored)) assignedId = null;
 
   if (assignedId && storedOk && /^[a-z0-9-]+$/i.test(assignedId)) {
     try {
@@ -529,7 +534,8 @@ function noProgramCard() {
   return missing
     ? h("div", { class: "card day-head no-program" },
         h("h2", { text: "Program atanmadı" }),
-        h("p", { class: "sub", text: "Sana henüz kişisel bir program tanımlanmamış. Aşağıdaki kullanıcı kimliğini program hazırlayan kişiye ilet." }),
+        h("p", { class: "sub", text: "Kendi yapay zekâ hesabınla program hazırlatabilir ya da aşağıdaki kullanıcı kimliğini program hazırlayan kişiye iletebilirsin." }),
+        h("button", { type: "button", class: "btn btn-primary", text: "Yapay zekâ ile program hazırla", onclick: () => openAi() }),
         uidBox, copyBtn)
     : h("div", { class: "card day-head no-program" },
         h("h2", { text: "Program yüklenemedi" }),
@@ -683,9 +689,10 @@ function renderProgram() {
   const idx = state.selectedIdx;
   const date = weekDates()[idx];
   const panel = $("dayPanel");
+  const draftCard = aiDraftCard();
   if (!PROGRAM) {
-    panel.replaceChildren(state.programState === "missing" || state.programState === "error" ? noProgramCard()
-      : h("div", { class: "card empty", text: "Program yükleniyor…" }));
+    panel.replaceChildren(...[draftCard, state.programState === "missing" || state.programState === "error" ? noProgramCard()
+      : h("div", { class: "card empty", text: "Program yükleniyor…" })].filter(Boolean));
     return;
   }
   const hasHome = Boolean(PLAN[idx].home);
@@ -704,14 +711,14 @@ function renderProgram() {
 
   if (plan.rest) {
     head.append(h("ul", { class: "rest-list" }, (plan.lines || []).map((l) => h("li", { text: l }))));
-    panel.replaceChildren(head);
+    panel.replaceChildren(...[draftCard].filter(Boolean), head);
     return;
   }
   if (state.loading) {
-    panel.replaceChildren(head, h("div", { class: "empty", text: "Kayıtlar yükleniyor…" }));
+    panel.replaceChildren(...[draftCard].filter(Boolean), head, h("div", { class: "empty", text: "Kayıtlar yükleniyor…" }));
     return;
   }
-  panel.replaceChildren(head, h("div", { class: "view" },
+  panel.replaceChildren(...[draftCard].filter(Boolean), head, h("div", { class: "view" },
     plan.items.map((item, n) => exerciseCard(date, item, n, mode)),
     h("div", { id: "dayDone", class: "card day-done", role: "status", hidden: !dayComplete(date, plan), text: "Antrenman tamamlandı ✓" })
   ));
@@ -1679,6 +1686,7 @@ function openSettings() {
   $("restInfo").textContent = `Dinlenme süresi şu an ${fmtRest(timer.preset)}. Sayaçtaki ±15 sn ile değiştirebilirsin.`;
   $("accountEmail").textContent = auth?.currentUser?.email ? `Giriş yapılan hesap: ${auth.currentUser.email}` : "";
   $("accountEmail").hidden = !auth?.currentUser?.email;
+  refreshProgramSettings();
   const opts = [...document.querySelectorAll("[data-theme-opt]")];
   openModal($("settingsModal"), { focus: opts.find((b) => b.getAttribute("aria-checked") === "true") });
 }
@@ -1753,6 +1761,421 @@ async function deliverFile(file) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ============================================================
+   YAPAY ZEKÂ İLE PROGRAM
+   Kullanıcı kendi yapay zekâ hesabını (ChatGPT, Claude, Gemini…) kullanır: uygulama talimatı hazırlar,
+   kullanıcı yapay zekâyla konuşur, son cevabı geri yapıştırır; uygulama doğrular, önizler, onayla yükler.
+   Sunucu ya da API anahtarı yoktur. Yarım kalan akış cihazda taslak olarak saklanır (uygulama
+   değiştirirken iPhone sayfayı kapatabilir).
+   ============================================================ */
+
+const aiDraftKey = () => `postur-ai-${state.uid}`;
+const programBackupRef = () => doc(db, "users", state.uid, "settings", "programBackup");
+const AI_DRAFT_DAYS = 7;
+
+function aiDraft() {
+  try {
+    const d = JSON.parse(lsGet(aiDraftKey()));
+    if (!d || Date.now() - (d.savedAt || 0) > AI_DRAFT_DAYS * 86400000) return null;
+    return { step: [1, 2, 3].includes(d.step) ? d.step : 1, request: String(d.request || ""), output: String(d.output || ""), savedAt: d.savedAt };
+  } catch { return null; }
+}
+
+function saveAiDraft(patch) {
+  const d = { ...(aiDraft() || { step: 1, request: "", output: "" }), ...patch, savedAt: Date.now() };
+  lsSet(aiDraftKey(), JSON.stringify(d));
+}
+
+function clearAiDraft() {
+  lsDel(aiDraftKey());
+}
+
+// Program ekranında yarım kalan akış için kalıcı kart (kaybolan toast'a bırakılmaz).
+function aiDraftCard() {
+  if (!state.uid) return null;
+  const d = aiDraft();
+  if (!d || (d.step < 2 && !d.output)) return null;
+  return h("div", { class: "card ai-draft", role: "region", "aria-label": "Yarım kalan yapay zekâ programı" },
+    h("strong", { text: "Yapay zekâyla hazırladığın program yarım kaldı" }),
+    h("span", { class: "muted", text: d.step === 3 ? "Planı yapıştırma adımındaydın." : "Yapay zekâdan son cevabı alıp buraya yapıştırman gerekiyor." }),
+    h("div", { class: "settings-row" },
+      h("button", { type: "button", class: "btn btn-primary", text: "Devam et", onclick: () => openAi() }),
+      h("button", { type: "button", class: "btn btn-ghost", text: "Vazgeç", onclick: () => {
+        const prev = aiDraft();
+        clearAiDraft();
+        renderCurrent();
+        toast("Yarım kalan program silindi.", { action: "Geri al", onAction: () => { saveAiDraft(prev); renderCurrent(); } });
+      } })
+    ));
+}
+
+/* ---------- Talimat ---------- */
+
+function programSummary(p) {
+  if (!p) return "(Henüz programı yok.)";
+  const line = (plan) => plan.rest ? "Dinlenme"
+    : `${plan.title || ""}: ` + plan.items.map((it) => `${it.name || p.exercises[it.ex]?.name || it.ex} ${it.sets > 1 ? `${it.sets}×` : ""}${it.reps}`).join(", ");
+  return [`Ad: ${p.name || "-"}`,
+    ...p.days.map((d, i) => `- ${DAYS[i]} (salon) ${line(d)}${d.home ? `\n  ${DAYS[i]} (ev) ${line(d.home)}` : ""}`),
+    p.safetyNote ? `Güvenlik notu: ${p.safetyNote}` : ""].filter(Boolean).join("\n");
+}
+
+function exerciseLibrary() {
+  const lib = { ...(PROGRAM?.exercises || {}) };
+  const rows = Object.entries(lib).map(([k, e]) =>
+    `- ${k}: ${e.name}${e.weight ? " (ağırlıklı)" : ""}${e.cardio ? " (kardiyo)" : ""}${exerciseVideos[k] || e.video ? " [videolu]" : ""}`);
+  return rows.length ? rows.join("\n") : "(Kütüphane boş; yeni hareketler tanımlayabilirsin.)";
+}
+
+const AI_EXAMPLE = {
+  name: "Postür ve kuvvet – 3 gün",
+  safetyNote: "Ağrı artarsa hareketi bırak. Sürekli ağrıda doktora ya da fizyoterapiste danış.",
+  progression: { title: "İlerleme", items: ["Tüm setler rahatsa bir sonraki hafta 2,5 kg ekle."] },
+  exercises: {
+    gobletSquat: { name: "Goblet squat", weight: true, purpose: "Bacak ve kalça gücü.", form: "Göğüs dik, dizler ayak ucu yönünde.", search: "goblet squat doğru form", alt: "sitToStand" },
+    sitToStand: { name: "Sandalyeden kalkış", weight: false, purpose: "Bacak gücü.", form: "Kollar önde, kontrollü otur-kalk.", search: "sandalyeden kalkış egzersizi", alt: "gobletSquat" },
+    plank: { name: "Plank", weight: false, purpose: "Gövde dayanıklılığı.", form: "Kalça düz, karın sıkı.", search: "plank doğru form" }
+  },
+  days: [
+    { title: "Tüm vücut A", items: [{ ex: "gobletSquat", key: "a1", sets: 3, reps: "10 tekrar" }, { ex: "plank", key: "a2", sets: 2, reps: "30 sn" }],
+      home: { title: "Evde A", items: [{ ex: "sitToStand", key: "h1", sets: 3, reps: "12 tekrar" }, { ex: "plank", key: "h2", sets: 2, reps: "30 sn" }] } },
+    { rest: true, title: "Dinlenme", lines: ["20–30 dk tempolu yürüyüş."] },
+    "… (toplam 7 gün, Pazartesi'den Pazar'a)"
+  ]
+};
+
+function buildAiPrompt(request) {
+  const req = request.trim();
+  return `# Görev
+Deneyimli bir antrenörsün. Aşağıdaki kişi için haftalık bir spor ve postür programı hazırlayacaksın. Program "Postür & Spor" uygulamasına yüklenecek; bu yüzden sonunda aşağıdaki JSON biçimine tam uymalısın. Türkçe konuş.
+
+# Kişinin isteği
+${req || "(Kişi bir şey yazmadı; ihtiyaçlarını sorarak öğren.)"}
+
+# Kişinin şu anki programı (değişiklik isterse bunu temel al)
+${programSummary(PROGRAM)}
+
+# Hareket kütüphanesi
+Bu hareketlerin uygulamada videosu ve geçmiş kayıtları var. Uygun olanlarda bu anahtarları ve adları AYNEN kullan; gerekiyorsa yeni hareket de ekleyebilirsin.
+${exerciseLibrary()}
+
+# Çalışma şekli
+1. Önce şunların bilinip bilinmediğini kontrol et: hedef; haftada kaç gün ve seans süresi; deneyim; salon, ev ya da ikisi; ağrı, sakatlık, ameliyat ya da hastalık; yapamadığı ya da sevmediği hareketler. Eksik olanları en fazla 5 kısa soru olarak TEK mesajda sor ve cevap bekle. Bu aşamada JSON verme.
+2. Ağrı, sakatlık ya da hastalık varsa riskli ve zorlayıcı hareketlerden kaçın, bunu güvenlik notuna yaz ve doktora ya da fizyoterapiste danışmasını öner. Tıbbi teşhis koyma.
+3. Bilgiler tamamlanınca programı hazırla. Cevabın 2–3 cümlelik kısa bir özet ve ardından TEK bir \`\`\`json kod bloğu olsun.
+4. Kişi değişiklik isterse programın TAMAMINI aynı biçimde yeniden ver.
+
+# JSON biçimi (kesin kurallar)
+- Kök: "name" (program adı), "safetyNote" (güvenlik notu), "progression" ({"title", "items": [cümleler]}), "exercises" (hareketler), "days" (tam 7 gün, Pazartesi'den Pazar'a).
+- "exercises": anahtar yalnızca harf ve rakam (ör. "gobletSquat"). Her hareket: "name" (Türkçe ad), "weight" (kg ile yapılıyorsa true, değilse false), "purpose" (amaç, 1 cümle), "form" (doğru form, 1 cümle), "search" (YouTube'da Türkçe arama ifadesi); isteğe bağlı "alt" (salon↔ev karşılığı hareketin anahtarı), "cardio": true (kardiyo ise).
+- Antrenman günü: {"title", "note" (isteğe bağlı), "items": [{"ex": hareket anahtarı, "key": gün içinde benzersiz kısa kod (ör. "a1"), "sets": 1–10 arası tam sayı, "reps": "10 tekrar" ya da "30 sn", "hint" (isteğe bağlı kısa ipucu)}], "home" (isteğe bağlı, aynı yapıda ekipmansız ev alternatifi)}.
+- Dinlenme günü: {"rest": true, "title": "Dinlenme", "lines": ["öneri cümlesi"]}.
+- Süreli hareketlerde "reps" "30 sn" ya da "1 dk" biçiminde olsun; uygulama sayacı buna göre açar.
+- JSON içinde yorum ya da başka alan olmasın.
+
+# Kısaltılmış örnek (biçimi göstermek içindir; "days" gerçek cevapta tam 7 gün olmalı)
+\`\`\`json
+${JSON.stringify(AI_EXAMPLE, null, 2)}
+\`\`\``;
+}
+
+/* ---------- Cevabı çözme ve doğrulama ---------- */
+
+// Metin içinden JSON'u bulur: önce ```json bloğu, yoksa ilk "{" ile son "}" arası.
+function extractAiJson(text) {
+  const t = String(text || "").trim();
+  if (!t) return { errors: ["Önce yapay zekânın son cevabını yapıştır."] };
+  const fenced = [...t.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/gi)].map((m) => m[1]).filter((b) => b.includes("{"));
+  const src = fenced.length ? fenced[fenced.length - 1] : t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1);
+  if (!src || !src.includes("{")) return { errors: ["Cevapta program (JSON) bulunamadı. Yapay zekâ henüz soru soruyor olabilir; soruları cevaplayıp son cevabı yapıştır."] };
+  try { return { obj: JSON.parse(src), errors: [] }; } catch (e) {
+    const pos = Number(String(e.message).match(/position (\d+)/)?.[1]);
+    const line = Number.isFinite(pos) ? src.slice(0, pos).split("\n").length : null;
+    return { errors: [`Program okunamadı${line ? ` (JSON ${line}. satır civarı)` : ""}: cevap eksik kopyalanmış olabilir. Cevabın tamamını kopyalayıp tekrar yapıştır ya da yapay zekâdan "JSON'u eksiksiz yeniden ver" iste.`] };
+  }
+}
+
+const isStr = (v, max, min = 1) => typeof v === "string" && v.trim().length >= min && v.length <= max;
+const optStr = (v, max) => v == null || isStr(v, max, 0);
+
+// Yapay zekâ cevabını uygulamanın program biçimine çevirir; her hatayı yeriyle söyler.
+function validateAiProgram(obj) {
+  const errors = [];
+  const err = (where, msg) => errors.push(`${where}: ${msg}`);
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { errors: ["Cevaptaki JSON bir program nesnesi değil."] };
+
+  const exIn = obj.exercises && typeof obj.exercises === "object" && !Array.isArray(obj.exercises) ? obj.exercises : null;
+  if (!exIn) err("exercises", "hareket listesi eksik.");
+  const exercises = {};
+  for (const [k, e] of Object.entries(exIn || {})) {
+    const at = `"${k}" hareketi`;
+    if (!/^[A-Za-z0-9]{1,40}$/.test(k)) { err(at, "anahtar yalnızca harf ve rakam olabilir."); continue; }
+    if (!e || typeof e !== "object") { err(at, "hareket bilgisi eksik."); continue; }
+    if (!isStr(e.name, 80)) { err(at, "\"name\" (ad) eksik ya da çok uzun."); continue; }
+    if (!optStr(e.purpose, 300) || !optStr(e.form, 300) || !optStr(e.search, 100)) { err(at, "açıklama alanlarından biri çok uzun."); continue; }
+    exercises[k] = {
+      name: e.name.trim(), weight: e.weight === true,
+      ...(e.purpose ? { purpose: e.purpose } : {}), ...(e.form ? { form: e.form } : {}),
+      search: e.search || e.name, ...(e.cardio === true ? { cardio: true } : {}), ...(typeof e.alt === "string" ? { alt: e.alt } : {})
+    };
+  }
+  if (Object.keys(exercises).length > 80) err("exercises", "en fazla 80 hareket olabilir.");
+
+  const lib = PROGRAM?.exercises || {};
+  const useEx = (ex) => {
+    if (exercises[ex]) return true;
+    if (lib[ex]) { exercises[ex] = { ...lib[ex] }; return true; } // kütüphaneden kullanıldı, tanımı eksik verildi
+    return false;
+  };
+
+  const checkPlan = (plan, where) => {
+    if (!plan || typeof plan !== "object") { err(where, "gün bilgisi eksik."); return null; }
+    if (plan.rest === true) {
+      const lines = Array.isArray(plan.lines) ? plan.lines.filter((l) => isStr(l, 300)).slice(0, 6) : [];
+      return { rest: true, title: isStr(plan.title, 80) ? plan.title : "Dinlenme", lines };
+    }
+    if (!Array.isArray(plan.items) || !plan.items.length) { err(where, "hareket listesi (\"items\") boş; dinlenme günüyse \"rest\": true olmalı."); return null; }
+    if (plan.items.length > 15) err(where, "en fazla 15 hareket olabilir.");
+    const keys = new Set();
+    const items = [];
+    plan.items.forEach((it, i) => {
+      const at = `${where}, ${i + 1}. hareket`;
+      if (!it || typeof it !== "object") { err(at, "bilgi eksik."); return; }
+      if (typeof it.ex !== "string" || !useEx(it.ex)) { err(at, `"${it?.ex}" hareketi "exercises" içinde tanımlı değil.`); return; }
+      const key = typeof it.key === "string" && /^[A-Za-z0-9_-]{1,20}$/.test(it.key) ? it.key : `k${i + 1}`;
+      if (keys.has(key)) { err(at, `"key" (${key}) gün içinde tekrar ediyor.`); return; }
+      keys.add(key);
+      if (!Number.isInteger(it.sets) || it.sets < 1 || it.sets > 10) { err(at, "\"sets\" 1–10 arası tam sayı olmalı."); return; }
+      if (!isStr(String(it.reps ?? ""), 40)) { err(at, "\"reps\" (tekrar ya da süre) eksik."); return; }
+      items.push({ ex: it.ex, key, sets: it.sets, reps: String(it.reps),
+        ...(isStr(it.hint, 80) ? { hint: it.hint } : {}),
+        ...(Number.isInteger(it.duration) && it.duration >= 5 && it.duration <= 3600 ? { duration: it.duration } : {}) });
+    });
+    return { title: isStr(plan.title, 80) ? plan.title : "Antrenman", ...(isStr(plan.note, 300) ? { note: plan.note } : {}), items };
+  };
+
+  const days = [];
+  if (!Array.isArray(obj.days) || obj.days.length !== 7) err("days", `tam 7 gün olmalı (cevapta ${Array.isArray(obj.days) ? obj.days.length : 0} var).`);
+  else obj.days.forEach((d, i) => {
+    const day = checkPlan(d, DAYS[i]);
+    if (!day) return;
+    if (d.home != null) { const home = checkPlan(d.home, `${DAYS[i]} (ev)`); if (home) day.home = home; }
+    days.push(day);
+  });
+
+  // alt referansı olmayan harekete gidiyorsa kaldır (uygulamada kırık bağlantı olmasın).
+  for (const e of Object.values(exercises)) if (e.alt && !exercises[e.alt]) delete e.alt;
+  // Yalnızca kullanılan hareketler kalsın.
+  const used = new Set(days.flatMap((d) => [...(d.items || []), ...(d.home?.items || [])].map((it) => it.ex)));
+  for (const e of Object.values(exercises)) if (e.alt) used.add(e.alt);
+  for (const k of Object.keys(exercises)) if (!used.has(k)) delete exercises[k];
+
+  if (errors.length) return { errors };
+  const prog = obj.progression && typeof obj.progression === "object" ? obj.progression : null;
+  const program = {
+    id: `ai-${ymd(new Date())}`, version: 1, source: "ai", createdAt: new Date().toISOString(),
+    name: isStr(obj.name, 80) ? obj.name.trim() : "Yapay zekâ programı",
+    ...(isStr(obj.safetyNote, 600) ? { safetyNote: obj.safetyNote.trim() } : {}),
+    ...(prog && Array.isArray(prog.items) ? { progression: {
+      title: isStr(prog.title, 80) ? prog.title : "İlerleme",
+      items: prog.items.filter((t) => isStr(t, 200)).slice(0, 10) } } : {}),
+    exercises, days
+  };
+  if (!days.some((d) => !d.rest)) return { errors: ["Programda hiç antrenman günü yok."] };
+  if (!validProgram(program)) return { errors: ["Program uygulamanın biçimine uymuyor."] };
+  return { program, errors: [] };
+}
+
+/* ---------- Önizleme ---------- */
+
+function aiDiff(next) {
+  const names = (p) => new Set(Object.values(p?.exercises || {}).map((e) => e.name));
+  const before = names(PROGRAM), after = names(next);
+  const added = [...after].filter((n) => !before.has(n)).length;
+  const removed = PROGRAM ? [...before].filter((n) => !after.has(n)).length : 0;
+  const workDays = next.days.filter((d) => !d.rest).length;
+  const homeDays = next.days.filter((d) => d.home && !d.home.rest).length;
+  const parts = [`${workDays} antrenman günü, ${7 - workDays} dinlenme`, `${after.size} hareket`];
+  if (PROGRAM) parts.push([added && `${added} yeni`, removed && `${removed} çıkarıldı`].filter(Boolean).join(", ") || "hareketler aynı");
+  if (homeDays) parts.push(`${homeDays} günde ev alternatifi`);
+  return parts.join(" · ");
+}
+
+function aiPreview(p) {
+  const list = (plan) => plan.rest
+    ? h("ul", null, (plan.lines.length ? plan.lines : ["Dinlenme"]).map((l) => h("li", { text: l })))
+    : h("ul", null, plan.items.map((it) => h("li", { text: `${p.exercises[it.ex].name} · ${it.sets > 1 ? `${it.sets} × ` : ""}${it.reps}` })));
+  return [
+    h("div", { class: "ai-summary", text: `${p.name} — ${aiDiff(p)}` }),
+    p.safetyNote && h("div", { class: "ai-safety" }, h("strong", { text: "Güvenlik notu: " }), p.safetyNote),
+    ...p.days.map((d, i) => h("div", null,
+      h("h4", { text: `${DAYS[i]} · ${d.title}` }), list(d),
+      d.home && h("div", { class: "muted", text: `Evde: ${d.home.title}` }), d.home && list(d.home)))
+  ];
+}
+
+/* ---------- Akış ---------- */
+
+let aiCurrent = null; // doğrulanmış program (yüklemeye hazır)
+
+function aiShowStep(step) {
+  saveAiDraft({ step });
+  [1, 2, 3].forEach((n) => { $(`aiStep${n}`).hidden = n !== step; });
+  $("aiStepLabel").textContent = `Adım ${step}/3`;
+  const focus = { 1: "aiRequest", 2: "aiToPaste", 3: "aiOutput" }[step];
+  $(focus)?.focus();
+}
+
+function openAi() {
+  if (!state.uid) return;
+  if (!$("settingsModal").hidden) closeModal($("settingsModal"));
+  const d = aiDraft() || { step: 1, request: "", output: "" };
+  $("aiRequest").value = d.request;
+  $("aiOutput").value = d.output;
+  $("aiManual").hidden = true;
+  $("aiShare").hidden = !navigator.share;
+  aiCurrent = null;
+  $("aiError").hidden = true;
+  $("aiPreview").hidden = true;
+  openModal($("aiModal"), { close: closeAi });
+  aiShowStep(d.step);
+  if (d.step === 3 && d.output) aiCheck(false);
+}
+
+function closeAi() {
+  closeModal($("aiModal"));
+  renderCurrent(); // yarım kaldıysa "Devam et" kartı görünsün
+}
+
+async function aiCopy() {
+  const text = buildAiPrompt($("aiRequest").value);
+  saveAiDraft({ request: $("aiRequest").value });
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Talimat kopyalandı. Yapay zekâya yapıştır.");
+    aiShowStep(2);
+  } catch {
+    $("aiPromptText").value = text;
+    $("aiManual").hidden = false;
+    $("aiPromptText").focus();
+    $("aiPromptText").select();
+  }
+}
+
+async function aiShare() {
+  const text = buildAiPrompt($("aiRequest").value);
+  saveAiDraft({ request: $("aiRequest").value });
+  try { await navigator.share({ text }); aiShowStep(2); }
+  catch (e) { if (e?.name !== "AbortError") aiCopy(); }
+}
+
+// show: hata ve önizleme gösterilsin mi (yapıştırırken sessiz, düğmede tam).
+function aiCheck(show = true) {
+  const text = $("aiOutput").value;
+  saveAiDraft({ output: text });
+  aiCurrent = null;
+  const parsed = extractAiJson(text);
+  const res = parsed.errors.length ? parsed : validateAiProgram(parsed.obj);
+  const errEl = $("aiError");
+  if (res.errors.length) {
+    $("aiPreview").hidden = true;
+    if (show || !errEl.hidden) {
+      errEl.replaceChildren(res.errors.length === 1 ? res.errors[0] : `${res.errors.length} sorun var. Yapay zekâya bunları düzeltmesini söyleyip yeni cevabı yapıştır:`);
+      if (res.errors.length > 1) errEl.append(h("ul", null, res.errors.slice(0, 6).map((t) => h("li", { text: t })),
+        res.errors.length > 6 && h("li", { text: `… ve ${res.errors.length - 6} sorun daha` })));
+      errEl.hidden = false;
+    }
+    return null;
+  }
+  errEl.hidden = true;
+  aiCurrent = res.program;
+  $("aiPreview").replaceChildren(...aiPreview(res.program).filter(Boolean));
+  $("aiPreview").hidden = false;
+  return res.program;
+}
+
+async function writeProgram(program, { backup = true } = {}) {
+  if (backup && PROGRAM) await setDoc(programBackupRef(), { program: PROGRAM, savedAt: serverTimestamp() });
+  await setDoc(programRef(), { ...program, assignedAt: serverTimestamp() });
+  applyProgram(program);
+  renderTabs();
+  renderCurrent();
+}
+
+async function aiLoad() {
+  const program = aiCurrent || aiCheck(true);
+  if (!program) return;
+  const btn = $("aiLoad");
+  btn.disabled = true;
+  try {
+    await writeProgram(program);
+    clearAiDraft();
+    closeAi();
+    toast(`"${program.name}" yüklendi.`, { action: "Geri al", duration: 10000, onAction: () => restorePrevious() });
+  } catch {
+    $("aiError").replaceChildren("Program kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.");
+    $("aiError").hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Önceki programla şimdikini yer değiştirir (geri al da aynı işlemle yapılır).
+async function restorePrevious() {
+  try {
+    const snap = await getDoc(programBackupRef());
+    const prev = snap.exists() ? snap.data().program : null;
+    if (!validProgram(prev)) { toast("Önceki program bulunamadı."); return; }
+    await writeProgram(pickProgram(prev));
+    toast(`"${PROGRAM.name || "Önceki program"}" geri yüklendi.`, { action: "Geri al", duration: 10000, onAction: () => restorePrevious() });
+  } catch {
+    toast("Önceki programa dönülemedi. İnternet bağlantını kontrol edip tekrar dene.");
+  }
+}
+
+async function restoreTemplate() {
+  const id = state.assignedTemplate;
+  try {
+    const snap = id && /^[a-z0-9-]+$/i.test(id) ? await getDoc(doc(db, "templates", id)) : null;
+    const tpl = snap?.exists() ? snap.data() : null;
+    if (!validProgram(tpl)) { toast("Sana atanmış hazır program bulunamadı."); return; }
+    closeModal($("settingsModal"));
+    await writeProgram(pickProgram(tpl));
+    toast("Hazır programa dönüldü.", { action: "Geri al", duration: 10000, onAction: () => restorePrevious() });
+  } catch {
+    toast("Hazır programa dönülemedi. İnternet bağlantını kontrol edip tekrar dene.");
+  }
+}
+
+// Ayarlar açılınca Program bölümünü günceller.
+async function refreshProgramSettings() {
+  const ai = PROGRAM?.source === "ai";
+  const when = ai && PROGRAM.createdAt ? ` · ${longDate(ymd(new Date(PROGRAM.createdAt)))}` : "";
+  $("programInfo").textContent = PROGRAM
+    ? `Şu anki program: ${PROGRAM.name || "Program"}${ai ? ` (yapay zekâyla hazırlandı${when})` : ""}.`
+    : "Henüz programın yok.";
+  $("programTemplate").hidden = !(ai && state.assignedTemplate);
+  $("programPrev").hidden = true;
+  try { $("programPrev").hidden = !(await getDoc(programBackupRef())).exists(); } catch { /* çevrimdışı */ }
+}
+
+function initAi() {
+  $("aiOpen").addEventListener("click", openAi);
+  $("aiClose").addEventListener("click", closeAi);
+  $("aiCopy").addEventListener("click", aiCopy);
+  $("aiCopyAgain").addEventListener("click", aiCopy);
+  $("aiShare").addEventListener("click", aiShare);
+  $("aiToPaste").addEventListener("click", () => aiShowStep(3));
+  $("aiBack2").addEventListener("click", () => aiShowStep(1));
+  $("aiBack3").addEventListener("click", () => aiShowStep(2));
+  $("aiLoad").addEventListener("click", aiLoad);
+  let t = null;
+  $("aiRequest").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => saveAiDraft({ request: $("aiRequest").value }), 300); });
+  $("aiOutput").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => aiCheck(false), 300); });
+  $("programPrev").addEventListener("click", () => { closeModal($("settingsModal")); restorePrevious(); });
+  $("programTemplate").addEventListener("click", restoreTemplate);
 }
 
 /* ---------- Görünüm (tema) seçimi ---------- */
@@ -2006,6 +2429,7 @@ async function onSignedIn(user) {
   showView(hashToView(location.hash), { push: false }); // #gecmis / #istatistik ile doğrudan açılabilir
 
   state.programState = "loading";
+  state.assignedTemplate = null;
   PROGRAM = null; EX = {}; PLAN = [];
   await loadHistory();
   await Promise.all([loadProgram(), loadVideos()]);
@@ -2175,6 +2599,7 @@ function boot() {
   initConfirm();
   initTheme();
   initSettings();
+  initAi();
   initRadioKeys();
   initModal();
   initVideoImport();

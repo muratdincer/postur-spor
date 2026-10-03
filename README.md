@@ -14,6 +14,7 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 - **Süreli hareketler:** Plank gibi süreli hareketlerde her setin yanındaki ▶ tam ekran sayacı açar; 3 sn hazırlıktan sonra sayar, duraklatılabilir, bitince bip sesiyle seti kendisi işaretler.
 - **Geçmiş ve istatistik:** Önceki antrenmanlarını ve toplamlarını gör.
 - **Ayarlar:** Sağ üstteki dişliden görünüm (Sistem / Açık / Koyu), otomatik dinlenme, verilerini dışa aktarma (CSV / JSON) ve çıkış.
+- **Yapay zekâ ile program:** Ayarlar > Program > "Yapay zekâ ile içe aktar". Uygulamanın hazırladığı talimatı kendi yapay zekâ hesabına (ChatGPT, Claude, Gemini…) yapıştır, soruları orada cevapla, son cevabı geri yapıştır; uygulama kontrol edip önizler, onaylarsan yükler. Önceki programa ya da hazır programa Ayarlar'dan dönebilirsin.
 - **Koyu tema ve yazı boyutu:** Varsayılan olarak telefonun ayarlarını izler.
 - **Geri al:** Silinen bir seti 5 saniye içinde geri alabilirsin.
 - **Çevrimdışı:** İnternet yokken de uygulamayı açıp işaretlemeye devam et; bağlantı gelince kayıtlar eşitlenir. Bağlantı varken her açılışta en son sürüm gelir.
