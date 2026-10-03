@@ -1191,7 +1191,17 @@ function renderCurrent() {
   else renderStats();
 }
 
-function showView(name) {
+// Görünümlerin adresi: Program kök, Geçmiş #gecmis, İstatistik #istatistik (yer imi ve geri tuşu için).
+const VIEW_HASH = { program: "", history: "#gecmis", stats: "#istatistik" };
+const hashToView = (hash) => Object.keys(VIEW_HASH).find((v) => VIEW_HASH[v] && VIEW_HASH[v] === hash) || "program";
+const viewScroll = {}; // görünüm → kaydırma konumu (sekme değişince korunur)
+
+function showView(name, { push = true } = {}) {
+  if (state.view && !$("appShell").hidden) viewScroll[state.view] = window.scrollY;
+  if (push) {
+    const url = location.pathname + location.search + VIEW_HASH[name];
+    if (url !== location.pathname + location.search + location.hash) history.pushState({ view: name }, "", url);
+  }
   state.view = name;
   $("viewProgram").hidden = name !== "program";
   $("viewHistory").hidden = name !== "history";
@@ -1201,7 +1211,7 @@ function showView(name) {
     if (b.dataset.view === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   renderCurrent();
-  window.scrollTo(0, 0);
+  window.scrollTo(0, viewScroll[name] || 0);
 }
 
 /* ============================================================
@@ -1495,9 +1505,49 @@ const focusables = (el) => [...el.querySelectorAll(
   'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select, iframe, [tabindex]:not([tabindex="-1"])'
 )].filter((x) => !x.hidden && x.getClientRects().length > 0);
 
+/* Geri tuşu açık modalı kapatır: her modal geçmişe bir kayıt ekler, modal düğmeyle kapanınca o kayıt
+   history.back() ile geri alınır. history.back() asenkron olduğundan, bekleyen bir geri dönüş varken açılan
+   modalın kaydı geri dönüş tamamlanınca eklenir (yoksa yeni kayıt yanlışlıkla geri alınırdı). */
+let backPending = 0;
+let closingFromPop = false;
+const deferredPush = [];
+const afterBackQueue = [];
+
+function pushModalState(m) {
+  if (backPending) { deferredPush.push(m); return; }
+  history.pushState({ modal: true }, "");
+  m.pushed = true;
+}
+
+// Bekleyen geri dönüş bittikten sonra çalıştır (adres temizliği gibi).
+function afterBack(fn) {
+  if (backPending) afterBackQueue.push(fn); else fn();
+}
+
+function onPopState() {
+  if (backPending) {
+    backPending--;
+    if (!backPending) {
+      afterBackQueue.splice(0).forEach((fn) => fn());
+      deferredPush.splice(0).forEach((m) => { if (modalStack.includes(m)) pushModalState(m); });
+    }
+    return;
+  }
+  const top = modalStack[modalStack.length - 1];
+  if (top?.pushed) {
+    top.pushed = false; // kaydı tarayıcı zaten geri aldı
+    closingFromPop = true;
+    try { top.close(); } finally { closingFromPop = false; }
+    return;
+  }
+  if (state.uid) showView(hashToView(location.hash), { push: false });
+}
+
 function openModal(el, { close, focus, returnFocus } = {}) {
   if (modalStack.some((m) => m.el === el)) return;
-  modalStack.push({ el, close: close || (() => closeModal(el)), returnFocus: returnFocus || document.activeElement });
+  const m = { el, close: close || (() => closeModal(el)), returnFocus: returnFocus || document.activeElement, pushed: false };
+  modalStack.push(m);
+  pushModalState(m);
   el.hidden = false;
   document.body.classList.add("modal-open");
   (focus || focusables(el)[0])?.focus();
@@ -1509,6 +1559,7 @@ function closeModal(el, returnFocus) {
   if (i < 0) return;
   const [m] = modalStack.splice(i, 1);
   el.hidden = true;
+  if (m.pushed && !closingFromPop) { backPending++; history.back(); }
   if (!modalStack.length) document.body.classList.remove("modal-open");
   const back = returnFocus || m.returnFocus;
   if (back?.isConnected) back.focus({ preventScroll: true });
@@ -1733,7 +1784,10 @@ function openVideoImport() {
 
 function closeVideoImport() {
   closeModal($("importModal"));
-  if (location.hash === "#videolar") history.replaceState(null, "", location.pathname + location.search);
+  // Geri dönüş bitmeden adres değişirse #videolar kaydına dönülünce modal yeniden açılırdı.
+  afterBack(() => {
+    if (location.hash === "#videolar") history.replaceState(null, "", location.pathname + location.search);
+  });
 }
 
 // Yapıştırılan metni çözer: { items, errors }. JSON hatasında satır numarası verilir.
@@ -1867,7 +1921,7 @@ async function onSignedIn(user) {
   setStatus("idle");
   refreshConnectionUi();
   renderTabs();
-  showView("program");
+  showView(hashToView(location.hash), { push: false }); // #gecmis / #istatistik ile doğrudan açılabilir
 
   state.programState = "loading";
   PROGRAM = null; EX = {}; PLAN = [];
@@ -1946,6 +2000,8 @@ function initLogin() {
 
 function initNav() {
   document.querySelectorAll(".nav-btn").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual"; // konumu görünüm başına biz tutuyoruz
+  window.addEventListener("popstate", onPopState);
 }
 
 function initLifecycle() {
