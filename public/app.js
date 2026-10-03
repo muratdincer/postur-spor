@@ -800,7 +800,8 @@ function exerciseCard(date, item, order, mode = "gym") {
   const setsData = () => ensureEntry(date, item, order).sets;
   const initial = entry ? entry.sets : Array.from({ length: item.sets }, () => ({ completed: false, weight: null }));
   const last = lib.weight ? lastWeight(item.ex, date) : null;
-  const duration = durationOf(item);
+  const timing = setTiming(item);
+  const kind = timing && musicKind(item, lib, timing);
 
   const setsBox = h("div", { class: "sets" });
 
@@ -814,7 +815,7 @@ function exerciseCard(date, item, order, mode = "gym") {
       type: "button", class: "chk", role: "checkbox",
       "aria-checked": String(!!s.completed), "aria-label": `Set ${i + 1} tamamlandı`, text: "✓"
     });
-    // Süreli hareket: sayaç bitince set işaretlenir. Kart o an ekranda değilse (gün değişti vb.) doğrudan kaydedilir.
+    // Set sayacı (süreli ya da tahmini süreli): sayaç bitince set işaretlenir. Kart o an ekranda değilse (gün değişti vb.) doğrudan kaydedilir.
     const workKey = `${date}|${item.key}|${i}`;
     const markDone = () => {
       const e = ensureEntry(date, item, order);
@@ -824,13 +825,15 @@ function exerciseCard(date, item, order, mode = "gym") {
       saveNow(date);
       renderTabs();
     };
-    const workBtn = duration && h("button", {
-      type: "button", class: "btn work", "aria-label": `Set ${i + 1} süre sayacı`,
-      onclick: () => workToggle(workKey, duration, workBtn, btn, markDone, {
-        name, set: `Set ${i + 1} / ${state.docs[date]?.exercises[item.key]?.sets.length || item.sets}`
+    const workBtn = timing && h("button", {
+      type: "button", class: "btn work",
+      "aria-label": `Set ${i + 1} sayacını başlat, ${timing.estimated ? "tahmini " : ""}${fmtTime(timing.total)}`,
+      onclick: () => workToggle(workKey, timing, workBtn, btn, markDone, {
+        name, set: `Set ${i + 1} / ${state.docs[date]?.exercises[item.key]?.sets.length || item.sets}`,
+        kind, track: musicTrackFor(item.ex, kind)
       })
     });
-    if (workBtn) workBind(workKey, duration, workBtn, btn);
+    if (workBtn) workBind(workKey, timing, workBtn, btn);
     let input = null;
     const errId = `kgErr-${item.key}-${i}`;
     const errEl = h("p", { id: errId, class: "form-error set-error", hidden: true });
@@ -1337,7 +1340,7 @@ function initTimer() {
 }
 
 /* ============================================================
-   SÜRELİ HAREKET SAYACI (plank, duvar oturuşu vb.)
+   SET SAYACI: süreli setlerde gerçek süre, tekrarlı setlerde tahmini süre; sayaç boyunca müzik çalar
    ============================================================ */
 
 // Süre: şablondaki `duration` (sn) öncelikli, yoksa `reps` metninden okunur: "30 sn", "45 saniye", "1 dk",
@@ -1353,72 +1356,146 @@ function durationOf(item) {
   return total >= 5 && total <= 3600 ? total : null;
 }
 
+const REP_SEC = 4;     // tahmini tekrar süresi: kontrollü tempo (≈2 sn kaldır, 2 sn indir)
+const SIDE_SWITCH = 5; // iki taraf arasında geçiş (sn)
+
+const repText = (item) => `${item.reps ?? ""} ${item.hint ?? ""}`.toLocaleLowerCase("tr");
+// Taraf başına yapılan hareket: "10 / taraf", "30 sn / taraf", "her bacak".
+const perSide = (item) => /\/\s*taraf|her (taraf|bacak|kol)|each side|per side/.test(repText(item));
+
+// Tekrar sayısı: "12" → 12, "10–12" → 12 (üst sınır), "6 / taraf" → 6.
+function repCount(reps) {
+  const m = String(reps ?? "").match(/(\d+)(?:\s*[-–]\s*(\d+))?/);
+  const n = m ? Number(m[2] || m[1]) : 0;
+  return n >= 1 && n <= 100 ? n : null;
+}
+
+// Tekrar başına bekleme: "Her tekrarda 5 sn", "12 tekrar, 2 sn tut".
+function holdOf(item) {
+  const s = repText(item);
+  if (!/tekrar|tut/.test(s)) return 0;
+  const m = s.match(/(\d+)\s*(?:sn|saniye)/);
+  return m ? Math.min(30, Number(m[1])) : 0;
+}
+
+// Setin süresi. Süreli harekette şablondaki süre; tekrarlı harekette tekrar × tempo tahmini (5 sn'ye yuvarlanır).
+// Taraf başına hareketlerde iki taraf ve aradaki geçiş eklenir. Süresi okunamayan sette sayaç yoktur.
+function setTiming(item) {
+  const sides = perSide(item) ? 2 : 1;
+  const timed = durationOf(item);
+  if (timed) {
+    const total = timed * sides + (sides > 1 ? SIDE_SWITCH : 0);
+    return total <= 3600 ? { seg: timed, sides, total, estimated: false } : null;
+  }
+  const reps = repCount(item.reps);
+  if (!reps) return null;
+  const perRep = REP_SEC + holdOf(item);
+  const seg = Math.ceil((reps * perRep) / 5) * 5;
+  const total = seg * sides + (sides > 1 ? SIDE_SWITCH : 0);
+  return total <= 3600 ? { seg, sides, total, estimated: true, reps, perRep } : null;
+}
+
+const segmentsOf = (t) => (t.sides > 1
+  ? [{ side: 1, end: t.seg }, { change: true, end: t.seg + SIDE_SWITCH }, { side: 2, end: t.total }]
+  : [{ end: t.total }]);
+
 const WORK_PREP = 3; // başlamadan önce pozisyon alma süresi (sn)
+const WORK_EXTEND = 15; // tahmini sette "+15 sn"
 const work = {
-  key: null, total: 0, endAt: 0, go: false, iv: null, btn: null, chk: null, done: null,
-  paused: false, leftMs: 0, lastBeep: null
+  key: null, total: 0, segs: [], segIdx: -1, timing: null, endAt: 0, iv: null, btn: null, chk: null, done: null,
+  paused: false, leftMs: 0, lastBeep: null, kind: null, track: 0
 };
 
-function workIdle(btn, duration) {
-  btn.textContent = `▶ ${fmtTime(duration)}`;
+const workLabel = (t) => `${t.estimated ? "~" : ""}${fmtTime(t.total)}`;
+
+function workIdle(btn, timing) {
+  btn.textContent = `▶ ${workLabel(timing)}`;
   btn.classList.remove("is-running");
   btn.setAttribute("aria-pressed", "false");
 }
 
 const workLeftMs = () => Math.max(0, work.paused ? work.leftMs : work.endAt - Date.now());
 
-// Tam ekran sayaç ve set satırındaki düğme birlikte güncellenir.
+// Geçen süreye göre bulunulan bölüm (tek taraf, ya da 1. taraf → geçiş → 2. taraf). Hazırlıkta -1.
+function workSegment(leftMs) {
+  const el = work.total * 1000 - leftMs;
+  if (el < 0) return { i: -1, el };
+  const i = work.segs.findIndex((s) => el < s.end * 1000);
+  return { i: i < 0 ? work.segs.length - 1 : i, el };
+}
+
+// Tam ekran sayaç ve set satırındaki düğme birlikte güncellenir. Büyük sayı bulunulan bölümün kalan süresidir,
+// çubuk ve set satırındaki düğme bütün setin.
 function workRender() {
   const leftMs = workLeftMs();
   const left = Math.ceil(leftMs / 1000);
-  const prep = left > work.total;
+  const { i, el } = workSegment(leftMs);
+  const prep = i < 0;
+  const seg = work.segs[i];
   const b = work.btn;
   if (b?.isConnected) {
     b.textContent = prep ? `Hazır ${left - work.total}` : `■ ${fmtTime(left)}`;
     b.classList.add("is-running");
     b.setAttribute("aria-pressed", "true");
   }
-  const screen = $("workScreen");
-  screen.dataset.phase = work.paused ? "paused" : prep ? "prep" : "work";
-  $("workPhase").textContent = work.paused ? "Duraklatıldı" : prep ? "Hazırlan" : "Çalış";
-  $("workTime").textContent = prep ? String(left - work.total) : fmtTime(left);
-  const frac = prep ? 0 : 1 - leftMs / (work.total * 1000);
+  $("workScreen").dataset.phase = work.paused ? "paused" : prep || seg.change ? "prep" : "work";
+  $("workPhase").textContent = work.paused ? "Duraklatıldı" : prep ? "Hazırlan" : seg.change ? "Taraf değiştir"
+    : seg.side ? `Çalış · ${seg.side}. taraf` : "Çalış";
+  $("workTime").textContent = prep ? String(left - work.total) : fmtTime(Math.ceil((seg.end * 1000 - el) / 1000));
+  const frac = prep ? 0 : el / (work.total * 1000);
   $("workBar").style.transform = `scaleX(${Math.min(1, Math.max(0, frac))})`;
   $("workPause").textContent = work.paused ? "Devam" : "Duraklat";
 }
 
 // Kart yeniden çizildiğinde çalışan sayaç yeni düğmeye bağlanır.
-function workBind(key, duration, btn, chk) {
-  if (work.key !== key) { workIdle(btn, duration); return; }
+function workBind(key, timing, btn, chk) {
+  if (work.key !== key) { workIdle(btn, timing); return; }
   work.btn = btn;
   work.chk = chk;
   workRender();
 }
 
 // Set düğmesi tam ekran sayacı açar; çalışırken aynı düğmeye dokunmak iptal eder.
-function workToggle(key, duration, btn, chk, done, info) {
+// Müzik bu dokunuşla başlar (iOS yalnızca kullanıcı dokunuşuyla ses başlatmaya izin verir).
+function workToggle(key, timing, btn, chk, done, info) {
   const same = work.key === key;
   workCancel();
   if (same) return;
   audioUnlock();
   Object.assign(work, {
-    key, total: duration, btn, chk, done, go: false, paused: false, lastBeep: null,
-    endAt: Date.now() + (WORK_PREP + duration) * 1000
+    key, timing, total: timing.total, segs: segmentsOf(timing), segIdx: -1, btn, chk, done, paused: false, lastBeep: null,
+    endAt: Date.now() + (WORK_PREP + timing.total) * 1000, kind: info.kind, track: info.track
   });
   $("workName").textContent = info.name;
   $("workSet").textContent = info.set;
+  $("workHint").textContent = timing.estimated
+    ? `Tahmini süre: ${timing.reps} tekrar${timing.sides > 1 ? " her tarafta" : ""} × ~${timing.perRep} sn. Erken biterse “Seti bitir”e dokun.`
+    : timing.sides > 1 ? `Her taraf ${fmtTime(timing.seg)}, arada ${SIDE_SWITCH} sn geçiş.` : "";
+  $("workHint").hidden = !$("workHint").textContent;
+  $("workExtend").hidden = !timing.estimated;
   openModal($("workScreen"), { close: workCancel, focus: $("workPause"), returnFocus: btn });
   work.iv = setInterval(workTick, 250);
   keepAwake("work", true);
+  musicStart(work.kind, work.track);
   workRender();
 }
 
 function workTick() {
   if (!work.key || work.paused) return;
-  const left = Math.ceil((work.endAt - Date.now()) / 1000);
-  if (left <= 0) { workFinish(); return; }
-  if (!work.go && left <= work.total) { work.go = true; work.lastBeep = left; beep(1); announce("Başla."); }
-  else if (work.go && left <= 3 && left !== work.lastBeep) { work.lastBeep = left; beep(1, 0.08); } // son 3 sn
+  const leftMs = work.endAt - Date.now();
+  if (leftMs <= 0) { workFinish(); return; }
+  const { i, el } = workSegment(leftMs);
+  if (i >= 0) {
+    const seg = work.segs[i];
+    if (i !== work.segIdx) {
+      work.segIdx = i;
+      if (seg.change) { beep(2); announce("Taraf değiştir."); }
+      else { beep(1); announce(seg.side === 2 ? "Diğer taraf, başla." : "Başla."); }
+    } else if (!seg.change) {
+      const segLeft = Math.ceil((seg.end * 1000 - el) / 1000);
+      if (segLeft <= 3 && segLeft !== work.lastBeep) { work.lastBeep = segLeft; beep(1, 0.08); } // bölümün son 3 sn'si
+    }
+  }
   workRender();
 }
 
@@ -1428,17 +1505,31 @@ function workPauseToggle() {
     work.endAt = Date.now() + work.leftMs;
     work.paused = false;
     work.iv = setInterval(workTick, 250);
+    musicResume();
   } else {
     work.leftMs = work.endAt - Date.now();
     work.paused = true;
     clearInterval(work.iv);
+    musicPause();
   }
+  workRender();
+}
+
+// Tahmini sette süre yetmediyse son bölüm uzatılır.
+function workExtend() {
+  if (!work.key) return;
+  work.total += WORK_EXTEND;
+  work.segs[work.segs.length - 1].end += WORK_EXTEND;
+  if (work.paused) work.leftMs += WORK_EXTEND * 1000; else work.endAt += WORK_EXTEND * 1000;
+  work.lastBeep = null;
+  announce(`${WORK_EXTEND} saniye eklendi.`);
   workRender();
 }
 
 function workCancel() {
   clearInterval(work.iv);
-  if (work.btn) workIdle(work.btn, work.total);
+  musicStop();
+  if (work.btn) workIdle(work.btn, work.timing);
   const focusBack = work.btn?.isConnected ? work.btn : null;
   Object.assign(work, { key: null, iv: null, btn: null, chk: null, done: null, paused: false });
   closeModal($("workScreen"), focusBack);
@@ -1447,18 +1538,199 @@ function workCancel() {
 
 function initWork() {
   $("workPause").addEventListener("click", workPauseToggle);
+  $("workFinish").addEventListener("click", () => workFinish(true));
+  $("workExtend").addEventListener("click", workExtend);
   $("workStop").addEventListener("click", workCancel);
+  initMusic();
 }
 
-function workFinish() {
+// early: kullanıcı "Seti bitir"e bastı (tahmini süre dolmadan).
+function workFinish(early = false) {
+  if (!work.key) return;
   const { chk, done } = work;
+  musicStop({ fade: !early });
   workCancel();
-  announce("Süre doldu, set tamamlandı.");
-  beep(3);
-  try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
+  announce(early ? "Set tamamlandı." : "Süre doldu, set tamamlandı.");
+  if (!early) {
+    beep(3);
+    try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
+  }
   // Ekrandaki ✓ düğmesine basılmış gibi: kayıt, otomatik dinlenme ve sonraki harekete geçiş aynı yoldan.
   if (chk?.isConnected) { if (chk.getAttribute("aria-checked") !== "true") chk.click(); }
   else done?.();
+}
+
+/* ============================================================
+   ANTRENMAN MÜZİĞİ
+   Sabit liste: Kevin MacLeod (incompetech.com), CC BY 4.0. Dosyalar public/music/ altında.
+   Her hareket türüne göre bir listeye atanır; hareketin kendi parçası adından seçilir, liste sırayla
+   ve döngüyle çalar. Parçaların kaldığı yer hatırlanır; arka arkaya setlerde müzik baştan başlamaz.
+   ============================================================ */
+
+const MUSIC = {
+  power: { label: "Kuvvet", tracks: ["volatile-reaction", "fearless-first", "exit-the-premises"] },
+  cardio: { label: "Kardiyo", tracks: ["raving-energy", "funkorama", "chill-wave", "wallpaper"] },
+  steady: { label: "Tempo", tracks: ["movement-proposition", "electrodoodle", "brain-dance"] },
+  calm: { label: "Esneme", tracks: ["meditation-impromptu-01", "dreamer", "deliberate-thought"] }
+};
+const TRACK_TITLES = {
+  "volatile-reaction": "Volatile Reaction", "fearless-first": "Fearless First", "exit-the-premises": "Exit the Premises",
+  "raving-energy": "Raving Energy", funkorama: "Funkorama", "chill-wave": "Chill Wave", wallpaper: "Wallpaper",
+  "movement-proposition": "Movement Proposition", electrodoodle: "Electrodoodle", "brain-dance": "Brain Dance",
+  "meditation-impromptu-01": "Meditation Impromptu 01", dreamer: "Dreamer", "deliberate-thought": "Deliberate Thought"
+};
+const MUSIC_ARTIST = "Kevin MacLeod";
+const CALM_RE = /stretch|esne|germe|mobil|chin (tuck|nod)|open book|thoracic|nefes|breath/;
+
+// Hareket türü: uzun ve sürekli (≥ 5 dk) → kardiyo, esneme/mobilite → sakin, salonda ağırlıklı → kuvvet,
+// geri kalan (vücut ağırlığı, core, denge) → tempo.
+function musicKind(item, lib, timing) {
+  if (lib.cardio || timing.total >= 300) return "cardio";
+  if (CALM_RE.test(`${item.name || ""} ${lib.name || ""} ${lib.purpose || ""}`.toLocaleLowerCase("tr"))) return "calm";
+  return lib.weight ? "power" : "steady";
+}
+
+// Aynı hareket her zaman aynı parçayla başlar.
+function musicTrackFor(exId, kind) {
+  let n = 0;
+  for (const c of String(exId)) n = (n * 31 + c.charCodeAt(0)) >>> 0;
+  return n % MUSIC[kind].tracks.length;
+}
+
+const music = {
+  el: null, on: lsGet("postur-music") !== "0", kind: null, idx: 0, pos: {}, playing: false, fadeIv: null, failed: false
+};
+const musicId = () => (music.kind ? MUSIC[music.kind].tracks[music.idx] : null);
+
+function musicEl() {
+  if (music.el) return music.el;
+  const a = new Audio();
+  a.preload = "none";
+  a.addEventListener("ended", () => {
+    music.pos[musicId()] = 0;
+    music.idx = (music.idx + 1) % MUSIC[music.kind].tracks.length;
+    if (music.playing) { musicLoad(); musicPlay(); }
+  });
+  a.addEventListener("error", () => { if (music.playing) musicFailed(); });
+  // Ekran kilitliyken zamanlayıcı yavaşlayabilir; müzik çalıyorsa onun olaylarıyla da süre kontrol edilir.
+  a.addEventListener("timeupdate", () => { if (work.key && !work.paused) workTick(); });
+  music.el = a;
+  return a;
+}
+
+function musicLoad() {
+  const a = musicEl();
+  const id = musicId();
+  const src = `music/${id}.m4a`;
+  if (!a.src.endsWith(src)) a.src = src;
+  const at = music.pos[id] || 0;
+  if (a.readyState >= 1) a.currentTime = at;
+  else if (at) a.addEventListener("loadedmetadata", () => { if (musicId() === id) a.currentTime = at; }, { once: true });
+  musicRender();
+  if ("mediaSession" in navigator && window.MediaMetadata) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: TRACK_TITLES[id], artist: MUSIC_ARTIST, album: "Postür & Spor" });
+    } catch { /* desteklenmiyor */ }
+  }
+}
+
+function musicPlay() {
+  const a = musicEl();
+  clearInterval(music.fadeIv);
+  a.volume = 1;
+  music.failed = false;
+  const p = a.play();
+  p?.catch((err) => { if (err?.name !== "AbortError" && music.playing) musicFailed(); });
+  musicRender();
+}
+
+function musicFailed() {
+  music.failed = true;
+  musicRender();
+}
+
+// Set başında çağrılır. Aynı türde art arda setlerde kalan parçadan devam edilir.
+function musicStart(kind, track) {
+  if (!kind) return;
+  if (music.kind !== kind) { music.kind = kind; music.idx = track; }
+  if (!music.on) { musicRender(); return; }
+  music.playing = true;
+  musicLoad();
+  musicPlay();
+}
+
+function musicSavePos() {
+  const a = music.el, id = musicId();
+  if (!a || !id) return;
+  music.pos[id] = a.duration && a.currentTime > a.duration - 5 ? 0 : a.currentTime;
+}
+
+function musicPause() {
+  if (!music.playing || !music.el) return;
+  music.el.pause();
+  musicSavePos();
+}
+
+function musicResume() {
+  if (!music.playing) return;
+  musicPlay();
+}
+
+// Set bitince müzik kısılarak durur (iOS ses düzeyini değiştirmeye izin vermez; orada kısa beklemeyle durur).
+function musicStop({ fade = false } = {}) {
+  if (!music.playing) return;
+  music.playing = false;
+  const a = music.el;
+  if (!a) return;
+  musicSavePos();
+  clearInterval(music.fadeIv);
+  if (!fade || a.paused) { a.pause(); musicRender(); return; }
+  const start = a.volume;
+  let step = 0;
+  music.fadeIv = setInterval(() => {
+    step++;
+    try { a.volume = Math.max(0, start * (1 - step / 8)); } catch { /* salt okunur */ }
+    if (step >= 8) { clearInterval(music.fadeIv); a.pause(); a.volume = 1; }
+  }, 75);
+  musicRender();
+}
+
+// Tam ekran sayaçtaki müzik satırı ve düğmesi.
+function musicRender() {
+  const btn = $("workMusic");
+  const info = $("workTrack");
+  btn.setAttribute("aria-pressed", String(music.on));
+  btn.textContent = music.on ? "Müziği kapat" : "Müziği aç";
+  const id = musicId();
+  info.textContent = !music.on ? "Müzik kapalı"
+    : music.failed ? "Müzik çalınamadı. İnternet bağlantını kontrol et; sayaç devam ediyor."
+    : id ? `♪ ${TRACK_TITLES[id]} · ${MUSIC_ARTIST} · ${MUSIC[music.kind].label}` : "";
+}
+
+function setMusicOn(on) {
+  music.on = on;
+  lsSet("postur-music", on ? "1" : "0");
+  $("musicOn").checked = on;
+  if (!on) musicStop();
+  else if (work.key) { music.playing = true; musicLoad(); if (!work.paused) musicPlay(); }
+  musicRender();
+}
+
+function initMusic() {
+  $("musicOn").checked = music.on;
+  $("musicOn").addEventListener("change", (e) => setMusicOn(e.target.checked));
+  $("workMusic").addEventListener("click", () => setMusicOn(!music.on));
+  $("musicList").replaceChildren(...Object.values(MUSIC).map((m) =>
+    h("li", null, h("b", { text: `${m.label}: ` }), m.tracks.map((t) => TRACK_TITLES[t]).join(", "))));
+  // Kilit ekranı ve kulaklık düğmeleri sayacı da duraklatır/sürdürür.
+  if ("mediaSession" in navigator) {
+    const ms = navigator.mediaSession;
+    try {
+      ms.setActionHandler("pause", () => { if (work.key && !work.paused) workPauseToggle(); });
+      ms.setActionHandler("play", () => { if (work.key && work.paused) workPauseToggle(); });
+    } catch { /* desteklenmiyor */ }
+  }
+  musicRender();
 }
 
 // Bip sesi: AudioContext yalnızca kullanıcı dokunuşuyla açılabilir (iOS), ilk başlatmada hazırlanır.
