@@ -193,6 +193,11 @@
             <button id="exportCsv" type="button" class="btn">Excel için (CSV)</button>
             <button id="exportJson" type="button" class="btn">Yedek (JSON)</button>
           </div>
+          <p id="exportStatus" class="modal-text export-status" role="status" aria-live="polite"></p>
+          <div id="exportReady" class="settings-row" hidden>
+            <button id="exportDeliver" type="button" class="btn btn-primary">Paylaş</button>
+            <button id="exportCancel" type="button" class="btn btn-ghost">Vazgeç</button>
+          </div>
         </section>
 
         <section class="settings-sec" aria-labelledby="accountTitle">
@@ -216,7 +221,21 @@
 
         <section id="aiStep1" class="ai-sec" aria-labelledby="aiStep1Title">
           <h3 id="aiStep1Title">İsteğini yaz</h3>
-          <label for="aiRequest" class="modal-text">Hedefin, haftada kaç gün ve kaç dakika, salon mu ev mi, ağrın ya da sakatlığın varsa kendi cümlelerinle yaz. Boş bırakırsan yapay zekâ sorar.</label>
+          <div id="aiModeBox" class="ai-mode">
+            <p id="aiModeLabel" class="ai-legend">Ne yapmak istiyorsun?</p>
+            <div class="ai-mode-group" role="radiogroup" aria-labelledby="aiModeLabel" aria-describedby="aiModeError" data-rg="aimode">
+              <button type="button" class="ai-opt" role="radio" data-ai-mode="modify" aria-checked="false">
+                <strong>Programımı değiştir</strong>
+                <span>Mevcut programın korunur; yalnızca istediğin kısımlar değişir.</span>
+              </button>
+              <button type="button" class="ai-opt" role="radio" data-ai-mode="new" aria-checked="false">
+                <strong>Yeni program oluştur</strong>
+                <span>Sıfırdan yeni bir program hazırlanır. Eskisi yedeklenir, istersen geri dönersin.</span>
+              </button>
+            </div>
+            <p id="aiModeError" class="form-error" hidden>Önce ne yapmak istediğini seç.</p>
+          </div>
+          <label id="aiRequestLabel" for="aiRequest" class="modal-text">Hedefin, haftada kaç gün ve kaç dakika, salon mu ev mi, ağrın ya da sakatlığın varsa kendi cümlelerinle yaz. Boş bırakırsan yapay zekâ sorar.</label>
           <textarea id="aiRequest" class="import-text ai-text" rows="5" placeholder="Ör. Haftada 3 gün, 45 dakika salonda; boyun ağrım var, duruşumu düzeltmek istiyorum."></textarea>
           <p class="modal-text ai-privacy">Adını, e-postanı ya da kimlik bilgini yazma. Talimat, kullandığın yapay zekâ servisine gider ve o servisin kurallarına tabidir.</p>
           <button id="aiCopy" type="button" class="btn btn-primary btn-block">Talimatı kopyala</button>
