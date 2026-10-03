@@ -15,7 +15,7 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 - **Geçmiş ve istatistik:** Önceki antrenmanlarını ve toplamlarını gör.
 - **Koyu tema:** Telefonun ayarına göre açık ya da koyu görünür; yazı boyutu ayarını da izler.
 - **Geri al:** Silinen bir seti 5 saniye içinde geri alabilirsin.
-- **Çevrimdışı:** İnternet yokken de işaretlemeye devam et; bağlantı gelince kayıtlar eşitlenir.
+- **Çevrimdışı:** İnternet yokken de uygulamayı açıp işaretlemeye devam et; bağlantı gelince kayıtlar eşitlenir. Bağlantı varken her açılışta en son sürüm gelir.
 
 ## Kullanım
 
