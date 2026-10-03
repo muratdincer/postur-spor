@@ -1562,29 +1562,40 @@ function workFinish(early = false) {
 
 /* ============================================================
    ANTRENMAN MÜZİĞİ
-   Sabit liste: Kevin MacLeod (incompetech.com), CC BY 4.0. Dosyalar public/music/ altında.
+   Sabit liste: farklı sanatçılardan CC BY 4.0 ve CC0 parçalar (ARTISTS). Dosyalar public/music/ altında.
    Her hareket türüne göre bir listeye atanır; hareketin kendi parçası adından seçilir, liste sırayla
    ve döngüyle çalar. Parçaların kaldığı yer hatırlanır; arka arkaya setlerde müzik baştan başlamaz.
    ============================================================ */
 
-// Her listede 5–10 parça; sayaç ekranındaki ⏮ ⏭ ve kilit ekranı düğmeleri liste içinde gezer.
+// Her listede 5–10 parça, her listede en az 4 farklı sanatçı; sayaç ekranındaki ⏮ ⏭ ve kilit ekranı düğmeleri liste içinde gezer.
 const MUSIC = {
-  power: { label: "Kuvvet", tracks: ["volatile-reaction", "fearless-first", "exit-the-premises", "cut-and-run", "exhilarate", "rhinoceros"] },
-  cardio: { label: "Kardiyo", tracks: ["raving-energy", "funkorama", "chill-wave", "wallpaper", "groove-grove", "life-of-riley"] },
-  steady: { label: "Tempo", tracks: ["movement-proposition", "electrodoodle", "brain-dance", "inspired", "pamgaea", "dispersion-relation"] },
-  calm: { label: "Esneme", tracks: ["meditation-impromptu-01", "dreamer", "deliberate-thought", "meditation-impromptu-02", "meditation-impromptu-03", "floating-cities"] }
+  power: { label: "Kuvvet", tracks: ["volatile-reaction", "hard-bounce", "road-1-fight", "ultra-metal", "cut-and-run", "sweat-time"] },
+  cardio: { label: "Kardiyo", tracks: ["funkorama", "get-a-move-on", "roller-fever", "everything-is-groovy", "origami", "united-we-groove"] },
+  steady: { label: "Tempo", tracks: ["movement-proposition", "transportation", "one-cool-minute", "facing-it", "inspired", "threshold"] },
+  calm: { label: "Esneme", tracks: ["meditation-impromptu-01", "in-this-moment", "namaste", "the-wind", "home-was-you", "once-more-with-you"] }
 };
-const TRACK_TITLES = {
-  "volatile-reaction": "Volatile Reaction", "fearless-first": "Fearless First", "exit-the-premises": "Exit the Premises",
-  "cut-and-run": "Cut and Run", exhilarate: "Exhilarate", rhinoceros: "Rhinoceros",
-  "raving-energy": "Raving Energy", funkorama: "Funkorama", "chill-wave": "Chill Wave", wallpaper: "Wallpaper",
-  "groove-grove": "Groove Grove", "life-of-riley": "Life of Riley",
-  "movement-proposition": "Movement Proposition", electrodoodle: "Electrodoodle", "brain-dance": "Brain Dance",
-  inspired: "Inspired", pamgaea: "Pamgaea", "dispersion-relation": "Dispersion Relation",
-  "meditation-impromptu-01": "Meditation Impromptu 01", dreamer: "Dreamer", "deliberate-thought": "Deliberate Thought",
-  "meditation-impromptu-02": "Meditation Impromptu 02", "meditation-impromptu-03": "Meditation Impromptu 03", "floating-cities": "Floating Cities"
+// Sanatçı ve lisans: atıf Ayarlar > Müzik'te ve README'de.
+const ARTISTS = {
+  macleod: { name: "Kevin MacLeod", site: "https://incompetech.com", license: "CC BY 4.0" },
+  shaw: { name: "Jason Shaw (Audionautix)", site: "https://audionautix.com", license: "CC BY 4.0" },
+  buckley: { name: "Scott Buckley", site: "https://www.scottbuckley.com.au", license: "CC BY 4.0" },
+  komiku: { name: "Komiku", site: "https://freemusicarchive.org/music/Komiku/", license: "CC0" },
+  lfm: { name: "Loyalty Freak Music", site: "https://freemusicarchive.org/music/Loyalty_Freak_Music/", license: "CC0" }
 };
-const MUSIC_ARTIST = "Kevin MacLeod";
+const TRACKS = {
+  "volatile-reaction": ["Volatile Reaction", "macleod"], "cut-and-run": ["Cut and Run", "macleod"],
+  funkorama: ["Funkorama", "macleod"], "movement-proposition": ["Movement Proposition", "macleod"],
+  inspired: ["Inspired", "macleod"], "meditation-impromptu-01": ["Meditation Impromptu 01", "macleod"],
+  "hard-bounce": ["Hard Bounce", "shaw"], "get-a-move-on": ["Get A Move On", "shaw"], "united-we-groove": ["United We Groove", "shaw"],
+  transportation: ["Transportation", "shaw"], threshold: ["Threshold", "shaw"], namaste: ["Namaste", "shaw"],
+  origami: ["Origami", "buckley"], "in-this-moment": ["In This Moment", "buckley"], "home-was-you": ["Home Was You", "buckley"],
+  "road-1-fight": ["Road 1 Fight", "komiku"], "everything-is-groovy": ["Everything is groovy", "komiku"],
+  "facing-it": ["Facing it", "komiku"], "the-wind": ["The Wind", "komiku"],
+  "ultra-metal": ["Ultra Metal", "lfm"], "sweat-time": ["Sweat Time!", "lfm"], "roller-fever": ["Roller Fever", "lfm"],
+  "one-cool-minute": ["One Cool Minute", "lfm"], "once-more-with-you": ["Once more with you", "lfm"]
+};
+const trackTitle = (id) => TRACKS[id][0];
+const trackArtist = (id) => ARTISTS[TRACKS[id][1]].name;
 const CALM_RE = /stretch|esne|germe|mobil|chin (tuck|nod)|open book|thoracic|nefes|breath/;
 
 // Hareket türü: uzun ve sürekli (≥ 5 dk) → kardiyo, esneme/mobilite → sakin, salonda ağırlıklı → kuvvet,
@@ -1634,7 +1645,7 @@ function musicLoad() {
   musicRender();
   if ("mediaSession" in navigator && window.MediaMetadata) {
     try {
-      navigator.mediaSession.metadata = new MediaMetadata({ title: TRACK_TITLES[id], artist: MUSIC_ARTIST, album: "Postür & Spor" });
+      navigator.mediaSession.metadata = new MediaMetadata({ title: trackTitle(id), artist: trackArtist(id), album: "Postür & Spor" });
     } catch { /* desteklenmiyor */ }
   }
 }
@@ -1717,7 +1728,7 @@ function musicSkip(dir) {
   music.playing = true;
   musicLoad();
   if (!work.paused) musicPlay();
-  announce(`${TRACK_TITLES[musicId()]} çalıyor.`);
+  announce(`${trackTitle(musicId())}, ${trackArtist(musicId())} çalıyor.`);
 }
 
 // Tam ekran sayaçtaki müzik satırı ve düğmesi.
@@ -1729,7 +1740,7 @@ function musicRender() {
   const id = musicId();
   info.textContent = !music.on ? "Müzik kapalı"
     : music.failed ? "Müzik çalınamadı. İnternet bağlantını kontrol et; sayaç devam ediyor."
-    : id ? `♪ ${TRACK_TITLES[id]} · ${MUSIC_ARTIST} · ${MUSIC[music.kind].label} ${music.idx + 1}/${MUSIC[music.kind].tracks.length}` : "";
+    : id ? `♪ ${trackTitle(id)} · ${trackArtist(id)} · ${MUSIC[music.kind].label} ${music.idx + 1}/${MUSIC[music.kind].tracks.length}` : "";
   $("musicPrev").hidden = $("musicNext").hidden = !music.on;
 }
 
@@ -1749,7 +1760,9 @@ function initMusic() {
   $("musicPrev").addEventListener("click", () => musicSkip(-1));
   $("musicNext").addEventListener("click", () => musicSkip(1));
   $("musicList").replaceChildren(...Object.values(MUSIC).map((m) =>
-    h("li", null, h("b", { text: `${m.label}: ` }), m.tracks.map((t) => TRACK_TITLES[t]).join(", "))));
+    h("li", null, h("b", { text: `${m.label}: ` }), m.tracks.map((t) => `${trackTitle(t)} (${trackArtist(t)})`).join(", "))));
+  $("musicArtists").replaceChildren(...Object.values(ARTISTS).map((a) =>
+    h("li", null, h("a", { href: a.site, target: "_blank", rel: "noopener noreferrer", text: a.name }), ` · ${a.license}`)));
   // Kilit ekranı ve kulaklık düğmeleri: oynat/duraklat sayacı da yönetir, önceki/sonraki parça değiştirir.
   if ("mediaSession" in navigator) {
     const ms = navigator.mediaSession;

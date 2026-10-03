@@ -12,7 +12,7 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 - **Videolar:** Her hareketin Türkçe anlatımlı videosunu kart üzerinden izle.
 - **Dinlenme sayacı:** Set bitince otomatik başlayabilen dinlenme zamanlayıcısı.
 - **Set sayacı:** Her setin yanındaki ▶ tam ekran sayacı açar; 3 sn hazırlıktan sonra sayar, duraklatılabilir, bitince bip sesiyle seti kendisi işaretler. Plank gibi süreli setlerde gerçek süre, tekrarlı setlerde tahmini süre (tekrar × ~4 sn, tekrar başı bekleme varsa eklenir; düğmede `~` ile gösterilir) kullanılır. Tahmini sette "+15 sn" ile uzatabilir, "Seti bitir" ile erken bitirebilirsin. "/ taraf" yazan hareketlerde iki taraf arka arkaya sayılır, arada 5 sn "Taraf değiştir" uyarısı verilir.
-- **Antrenman müziği:** Set sayacı çalışırken harekete uygun müzik çalar, set bitince durur. Hareketler dört listeye atanır (her birinde 6 parça): kuvvet (salonda ağırlıklı), kardiyo (5 dk ve üzeri), tempo (vücut ağırlığı, core) ve esneme (esneme, mobilite). Sayaçtaki ⏮ ⏭ ya da kilit ekranı/kulaklık düğmeleriyle liste içinde önceki/sonraki parçaya geçilir. Sayaçtaki "Müziği kapat" ya da Ayarlar > Müzik ile kapatılabilir.
+- **Antrenman müziği:** Set sayacı çalışırken harekete uygun müzik çalar, set bitince durur. Hareketler dört listeye atanır (her birinde 6 parça, en az 4 farklı sanatçı): kuvvet (salonda ağırlıklı), kardiyo (5 dk ve üzeri), tempo (vücut ağırlığı, core) ve esneme (esneme, mobilite). Sayaçtaki ⏮ ⏭ ya da kilit ekranı/kulaklık düğmeleriyle liste içinde önceki/sonraki parçaya geçilir. Sayaçtaki "Müziği kapat" ya da Ayarlar > Müzik ile kapatılabilir.
 - **Geçmiş ve istatistik:** Önceki antrenmanlarını ve toplamlarını gör.
 - **Ayarlar:** Sağ üstteki dişliden görünüm (Sistem / Açık / Koyu), otomatik dinlenme, müzik, verilerini dışa aktarma (CSV / JSON) ve çıkış.
 - **Yapay zekâ ile program:** Ayarlar > Program > "Yapay zekâ ile içe aktar". Uygulamanın hazırladığı talimatı kendi yapay zekâ hesabına (ChatGPT, Claude, Gemini…) yapıştır, soruları orada cevapla, son cevabı geri yapıştır; uygulama kontrol edip önizler, onaylarsan yükler. Önceki programa ya da hazır programa Ayarlar'dan dönebilirsin.
@@ -34,13 +34,21 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 
 ## Müzik lisansı
 
-`public/music/` altındaki parçalar Kevin MacLeod'a (incompetech.com) aittir ve [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/) lisansıyla kullanılır. Dosyalar ses düzeyi eşitlenip (−16 LUFS) 80 kbps AAC'ye dönüştürülmüştür.
+`public/music/` altındaki parçalar aşağıdaki sanatçılara aittir; her biri belirtilen Creative Commons lisansıyla kullanılır. Dosyalar ses düzeyi eşitlenip (−16 LUFS) 80 kbps AAC'ye dönüştürülmüştür; içerik değiştirilmemiştir.
+
+| Sanatçı | Lisans | Kaynak |
+|---|---|---|
+| Kevin MacLeod | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | incompetech.com |
+| Jason Shaw (Audionautix) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | audionautix.com |
+| Scott Buckley | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | scottbuckley.com.au |
+| Komiku | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | freemusicarchive.org/music/Komiku |
+| Loyalty Freak Music | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | freemusicarchive.org/music/Loyalty_Freak_Music |
 
 | Liste | Parçalar |
 |---|---|
-| Kuvvet | Volatile Reaction, Fearless First, Exit the Premises, Cut and Run, Exhilarate, Rhinoceros |
-| Kardiyo | Raving Energy, Funkorama, Chill Wave, Wallpaper, Groove Grove, Life of Riley |
-| Tempo | Movement Proposition, Electrodoodle, Brain Dance, Inspired, Pamgaea, Dispersion Relation |
-| Esneme | Meditation Impromptu 01, Dreamer, Deliberate Thought, Meditation Impromptu 02, Meditation Impromptu 03, Floating Cities |
+| Kuvvet | Volatile Reaction (Kevin MacLeod), Hard Bounce (Jason Shaw), Road 1 Fight (Komiku), Ultra Metal (Loyalty Freak Music), Cut and Run (Kevin MacLeod), Sweat Time! (Loyalty Freak Music) |
+| Kardiyo | Funkorama (Kevin MacLeod), Get A Move On (Jason Shaw), Roller Fever (Loyalty Freak Music), Everything is groovy (Komiku), Origami (Scott Buckley), United We Groove (Jason Shaw) |
+| Tempo | Movement Proposition (Kevin MacLeod), Transportation (Jason Shaw), One Cool Minute (Loyalty Freak Music), Facing it (Komiku), Inspired (Kevin MacLeod), Threshold (Jason Shaw) |
+| Esneme | Meditation Impromptu 01 (Kevin MacLeod), In This Moment (Scott Buckley), Namaste (Jason Shaw), The Wind (Komiku), Home Was You (Scott Buckley), Once more with you (Loyalty Freak Music) |
 
-Örnek atıf: "Volatile Reaction" Kevin MacLeod (incompetech.com), Licensed under Creative Commons: By Attribution 4.0 License, http://creativecommons.org/licenses/by/4.0/
+Örnek atıflar: "Volatile Reaction" Kevin MacLeod (incompetech.com), Licensed under Creative Commons: By Attribution 4.0 License · "Hard Bounce" Jason Shaw, audionautix.com, CC BY 4.0 · "Origami" Music by Scott Buckley, released under CC-BY 4.0, www.scottbuckley.com.au
