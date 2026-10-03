@@ -451,6 +451,22 @@ h1, h2, h3, p { margin: 0; }
 .settings-row .btn { flex: 1 1 auto; }
 .settings-note { font-size: var(--fs-sm); }
 
+/* Yapay zekâ ile program */
+.ai-sheet { gap: var(--sp-3); }
+.ai-sec { display: grid; gap: var(--sp-3); }
+.ai-sec h3 { font-size: var(--fs-lg); }
+.ai-step { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.ai-howto { margin: 0; padding-left: 20px; display: grid; gap: var(--sp-2); }
+.ai-privacy { font-size: var(--fs-sm); }
+.import-text.ai-text { font-family: inherit; font-size: max(16px, 1rem); line-height: 1.4; }
+.ai-preview { display: grid; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); }
+.ai-preview h4 { margin: 0; font-size: var(--fs-base); }
+.ai-preview ul { margin: var(--sp-1) 0 0; padding-left: 20px; font-size: var(--fs-md); color: var(--muted); }
+.ai-preview .ai-summary { font-weight: 600; }
+.ai-preview .ai-safety { padding: var(--sp-2) var(--sp-3); border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); font-size: var(--fs-md); }
+.ai-draft { padding: var(--sp-4); display: grid; gap: var(--sp-2); }
+.ai-draft .settings-row { margin-top: var(--sp-1); }
+
 /* Görünüm seçimi */
 .icon-btn { min-width: var(--tap); padding: 0; }
 .icon-btn svg { width: 22px; height: 22px; }
