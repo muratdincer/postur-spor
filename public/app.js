@@ -1666,7 +1666,16 @@ function initLifecycle() {
   });
 }
 
+// Uygulama kabuğu çevrimdışı açılabilsin (bkz. sw.js). Kayıt başarısızsa uygulama normal çalışır.
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("Service worker kaydedilemedi:", err));
+  });
+}
+
 function boot() {
+  registerServiceWorker();
   initLogin();
   initNav();
   initTimer();
