@@ -1567,17 +1567,22 @@ function workFinish(early = false) {
    ve döngüyle çalar. Parçaların kaldığı yer hatırlanır; arka arkaya setlerde müzik baştan başlamaz.
    ============================================================ */
 
+// Her listede 5–10 parça; sayaç ekranındaki ⏮ ⏭ ve kilit ekranı düğmeleri liste içinde gezer.
 const MUSIC = {
-  power: { label: "Kuvvet", tracks: ["volatile-reaction", "fearless-first", "exit-the-premises"] },
-  cardio: { label: "Kardiyo", tracks: ["raving-energy", "funkorama", "chill-wave", "wallpaper"] },
-  steady: { label: "Tempo", tracks: ["movement-proposition", "electrodoodle", "brain-dance"] },
-  calm: { label: "Esneme", tracks: ["meditation-impromptu-01", "dreamer", "deliberate-thought"] }
+  power: { label: "Kuvvet", tracks: ["volatile-reaction", "fearless-first", "exit-the-premises", "cut-and-run", "exhilarate", "rhinoceros"] },
+  cardio: { label: "Kardiyo", tracks: ["raving-energy", "funkorama", "chill-wave", "wallpaper", "groove-grove", "life-of-riley"] },
+  steady: { label: "Tempo", tracks: ["movement-proposition", "electrodoodle", "brain-dance", "inspired", "pamgaea", "dispersion-relation"] },
+  calm: { label: "Esneme", tracks: ["meditation-impromptu-01", "dreamer", "deliberate-thought", "meditation-impromptu-02", "meditation-impromptu-03", "floating-cities"] }
 };
 const TRACK_TITLES = {
   "volatile-reaction": "Volatile Reaction", "fearless-first": "Fearless First", "exit-the-premises": "Exit the Premises",
+  "cut-and-run": "Cut and Run", exhilarate: "Exhilarate", rhinoceros: "Rhinoceros",
   "raving-energy": "Raving Energy", funkorama: "Funkorama", "chill-wave": "Chill Wave", wallpaper: "Wallpaper",
+  "groove-grove": "Groove Grove", "life-of-riley": "Life of Riley",
   "movement-proposition": "Movement Proposition", electrodoodle: "Electrodoodle", "brain-dance": "Brain Dance",
-  "meditation-impromptu-01": "Meditation Impromptu 01", dreamer: "Dreamer", "deliberate-thought": "Deliberate Thought"
+  inspired: "Inspired", pamgaea: "Pamgaea", "dispersion-relation": "Dispersion Relation",
+  "meditation-impromptu-01": "Meditation Impromptu 01", dreamer: "Dreamer", "deliberate-thought": "Deliberate Thought",
+  "meditation-impromptu-02": "Meditation Impromptu 02", "meditation-impromptu-03": "Meditation Impromptu 03", "floating-cities": "Floating Cities"
 };
 const MUSIC_ARTIST = "Kevin MacLeod";
 const CALM_RE = /stretch|esne|germe|mobil|chin (tuck|nod)|open book|thoracic|nefes|breath/;
@@ -1695,6 +1700,26 @@ function musicStop({ fade = false } = {}) {
   musicRender();
 }
 
+// ⏭ listedeki sonraki parça; ⏮ parçanın ilk 3 sn'sinden sonra basılırsa parçayı başa sarar, değilse önceki parça.
+// Liste döngüseldir; seçilen parça sonraki setlerde kaldığı yerden sürer. Sayaç duraklatılmışsa yalnızca parça değişir.
+function musicSkip(dir) {
+  if (!music.on || !music.kind || !work.key) return;
+  const a = music.el;
+  if (dir < 0 && a && a.currentTime > 3) {
+    a.currentTime = 0;
+    music.pos[musicId()] = 0;
+    return;
+  }
+  musicSavePos();
+  const n = MUSIC[music.kind].tracks.length;
+  music.idx = (music.idx + dir + n) % n;
+  music.pos[musicId()] = 0; // atlanarak gelinen parça baştan başlar
+  music.playing = true;
+  musicLoad();
+  if (!work.paused) musicPlay();
+  announce(`${TRACK_TITLES[musicId()]} çalıyor.`);
+}
+
 // Tam ekran sayaçtaki müzik satırı ve düğmesi.
 function musicRender() {
   const btn = $("workMusic");
@@ -1704,7 +1729,8 @@ function musicRender() {
   const id = musicId();
   info.textContent = !music.on ? "Müzik kapalı"
     : music.failed ? "Müzik çalınamadı. İnternet bağlantını kontrol et; sayaç devam ediyor."
-    : id ? `♪ ${TRACK_TITLES[id]} · ${MUSIC_ARTIST} · ${MUSIC[music.kind].label}` : "";
+    : id ? `♪ ${TRACK_TITLES[id]} · ${MUSIC_ARTIST} · ${MUSIC[music.kind].label} ${music.idx + 1}/${MUSIC[music.kind].tracks.length}` : "";
+  $("musicPrev").hidden = $("musicNext").hidden = !music.on;
 }
 
 function setMusicOn(on) {
@@ -1720,14 +1746,18 @@ function initMusic() {
   $("musicOn").checked = music.on;
   $("musicOn").addEventListener("change", (e) => setMusicOn(e.target.checked));
   $("workMusic").addEventListener("click", () => setMusicOn(!music.on));
+  $("musicPrev").addEventListener("click", () => musicSkip(-1));
+  $("musicNext").addEventListener("click", () => musicSkip(1));
   $("musicList").replaceChildren(...Object.values(MUSIC).map((m) =>
     h("li", null, h("b", { text: `${m.label}: ` }), m.tracks.map((t) => TRACK_TITLES[t]).join(", "))));
-  // Kilit ekranı ve kulaklık düğmeleri sayacı da duraklatır/sürdürür.
+  // Kilit ekranı ve kulaklık düğmeleri: oynat/duraklat sayacı da yönetir, önceki/sonraki parça değiştirir.
   if ("mediaSession" in navigator) {
     const ms = navigator.mediaSession;
     try {
       ms.setActionHandler("pause", () => { if (work.key && !work.paused) workPauseToggle(); });
       ms.setActionHandler("play", () => { if (work.key && work.paused) workPauseToggle(); });
+      ms.setActionHandler("previoustrack", () => musicSkip(-1));
+      ms.setActionHandler("nexttrack", () => musicSkip(1));
     } catch { /* desteklenmiyor */ }
   }
   musicRender();
