@@ -346,6 +346,11 @@ h1, h2, h3, p { margin: 0; }
 .tile { padding: 14px; }
 .tile .v { font-size: 1.875rem; font-weight: 700; color: var(--accent); }
 .tile .l { font-size: var(--fs-sm); color: var(--muted); }
+.tile .delta { margin-top: var(--sp-1); font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+.tile .delta.up { color: var(--ok); }
+.segmented.seg-3 { grid-template-columns: repeat(3, 1fr); margin: 0; }
+.w-row .w-note { margin-left: auto; max-width: 9rem; font-size: var(--fs-xs); color: var(--muted); text-align: right; }
+.empty-action { display: grid; gap: var(--sp-3); justify-items: center; }
 .section-title { font-size: var(--fs-sm); letter-spacing: .05em; color: var(--muted); font-weight: 600; margin: 6px var(--sp-1) 0; text-transform: uppercase; }
 .w-row { padding: var(--sp-3) var(--sp-4); display: flex; align-items: center; gap: var(--sp-3); }
 .w-row .w-name { font-weight: 600; }
