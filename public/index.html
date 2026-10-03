@@ -59,7 +59,8 @@
         <button id="logoutBtn" class="btn btn-ghost" type="button">Çıkış yap</button>
       </div>
       <div id="offlineBanner" class="offline-banner" role="status" hidden>
-        Bağlantı yok. Değişikliklerin cihazda tutuluyor, bağlantı gelince kaydedilecek.
+        <span id="offlineText"></span>
+        <button id="retryBtn" type="button" class="btn btn-ghost" hidden>Tekrar dene</button>
       </div>
       <nav id="dayTabs" class="day-tabs" role="tablist" aria-label="Haftanın günleri"></nav>
     </header>
@@ -185,7 +186,8 @@
           <h2 id="importTitle">Video listesini içe aktar</h2>
         </div>
         <textarea id="importText" class="import-text" aria-labelledby="importTitle" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="JSON'u buraya yapıştır"></textarea>
-        <p id="importError" class="form-error" role="alert" hidden></p>
+        <p id="importPreview" class="modal-text" role="status"></p>
+        <div id="importError" class="form-error" role="alert" hidden></div>
         <button id="importSave" type="button" class="btn btn-primary btn-block">Kaydet</button>
         <button id="importCancel" type="button" class="btn btn-ghost btn-block">İptal</button>
       </div>

@@ -219,11 +219,18 @@ h1, h2, h3, p { margin: 0; }
   border-bottom: 1px solid var(--line);
 }
 .topbar-row { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-3) 0 var(--sp-4); }
-.app-title { font-size: 1.25rem; flex: 1; }
+.app-title { font-size: 1.25rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .save-status { font-size: var(--fs-sm); color: var(--muted); white-space: nowrap; }
 .save-status[data-state="saved"] { color: var(--ok); }
 .save-status[data-state="offline"] { color: var(--warn-text); font-weight: 600; }
-.offline-banner { margin: 6px var(--sp-3) 0; padding: var(--sp-2) var(--sp-3); border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); font-size: var(--fs-md); }
+.offline-banner {
+  margin: 6px var(--sp-3) 0; padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-3); min-height: var(--tap); border-radius: 10px;
+  background: var(--warn-bg); color: var(--warn-text); font-size: var(--fs-md);
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.offline-banner span { flex: 1; padding: var(--sp-1) 0; }
+.offline-banner .btn { color: var(--warn-text); text-decoration: underline; flex: 0 0 auto; }
+.save-status[data-state="error"] { color: var(--danger); font-weight: 600; }
 
 .day-tabs {
   display: flex; gap: var(--sp-2); overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -311,6 +318,8 @@ h1, h2, h3, p { margin: 0; }
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text);
 }
 .kg input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.kg input[aria-invalid="true"] { border: 2px solid var(--danger); }
+.set-error { flex-basis: 100%; margin: 0; padding-left: calc(3.25rem + var(--sp-3)); }
 .kg span { color: var(--muted); }
 
 .ex-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
@@ -460,6 +469,7 @@ h1, h2, h3, p { margin: 0; }
 .tag.alt { background: var(--accent-soft); color: var(--accent); }
 
 .day-done { padding: var(--sp-4); text-align: center; font-weight: 700; color: var(--ok); }
+.form-error ul { margin: var(--sp-1) 0 0; padding-left: 20px; }
 .import-text { width: 100%; font: var(--fs-sm)/1.4 ui-monospace, Menlo, monospace; padding: 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
 
 /* Süreli hareket sayacı (set satırında) */
