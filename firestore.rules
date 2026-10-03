@@ -20,6 +20,11 @@ service cloud.firestore {
     match /config/assignments {
       allow read: if request.auth != null;
     }
+    // Bildirim için açık (VAPID public) anahtar. Gizli anahtar secrets/push'ta durur; istemci kuralı yok, yalnızca
+    // servis hesabı (Admin SDK) okur.
+    match /config/push {
+      allow read: if request.auth != null;
+    }
 
   }
 }
