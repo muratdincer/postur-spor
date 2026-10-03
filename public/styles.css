@@ -75,9 +75,11 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 
-/* Koyu tema: telefonun ayarını izler. Oranlar koyu yüzeylere göre. */
+/* Koyu tema: varsayılan olarak telefonun ayarını izler (data-theme yok ya da "system").
+   Uygulama içindeki Görünüm seçimi <html data-theme="light|dark"> ile bunu ezer.
+   İki blok aynı token'ları taşır; birinde değişen diğerinde de değişmeli. Oranlar koyu yüzeylere göre. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #000000;
     --card: #1c1c1e;
     --surface-2: #2c2c2e;
@@ -111,6 +113,41 @@
     --shadow-seg: 0 1px 3px rgba(0, 0, 0, .4);
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --card: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --fill: #2c2c2e;
+  --btn-bg: #2c2c2e;
+  --seg-on: #636366;
+  --thumb-bg: #2c2c2e;
+  --topbar-bg: rgba(0, 0, 0, .85);
+  --nav-bg: rgba(28, 28, 30, .94);
+  --timer-bg: rgba(28, 28, 30, .97);
+  --overlay: rgba(0, 0, 0, .7);
+
+  --text: #f2f2f7;            /* card 15.4 · seg-on 5.7 */
+  --muted: #a1a1a6;           /* card 6.6 · fill 5.6 · ok-bg 6.0 */
+  --line: #38383a;
+  --line-strong: #8e8e93;     /* card 5.0 · btn-bg 4.2 */
+
+  --accent: #6ea8ff;          /* card 6.7 · btn-bg 5.7 · accent-soft 5.9 */
+  --accent-fill: #2563eb;
+  --accent-soft: #16284d;
+
+  --ok: #4cd471;              /* ok-bg 8.0 */
+  --ok-bg: #12301c;
+  --warn: #ffb04d;            /* warn-bg 8.4 */
+  --warn-bg: #3a2708;
+  --warn-text: #ffd59e;       /* warn-bg 11.6 */
+  --danger: #ff6961;          /* card 6.2 */
+
+  --shadow: 0 0 0 1px rgba(255, 255, 255, .06);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, .6);
+  --shadow-seg: 0 1px 3px rgba(0, 0, 0, .4);
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
@@ -383,6 +420,11 @@ h1, h2, h3, p { margin: 0; }
 }
 
 /* Toast: kısa bilgi ve "Geri al" (role=status ile duyurulur) */
+/* Görünüm seçimi */
+.icon-btn { min-width: var(--tap); padding: 0; }
+.icon-btn svg { width: 22px; height: 22px; }
+.segmented.theme-seg { grid-template-columns: repeat(3, 1fr); margin: 0; }
+
 .toast {
   position: fixed; z-index: 120; left: 50%; transform: translateX(-50%);
   top: calc(env(safe-area-inset-top) + var(--sp-2));
