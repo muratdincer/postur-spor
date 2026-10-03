@@ -90,10 +90,13 @@ const ytWatch = (id, start = 0) => `https://www.youtube.com/watch?v=${id}${start
 const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
 
+// CSS token'ının o anki değeri (açık/koyu temaya göre).
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 function placeholderImg(label) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="#dfe9f5"/>` +
-    `<g fill="none" stroke="#2563eb" stroke-width="6" stroke-linecap="round"><path d="M110 90h100M96 70v40M224 70v40M82 80v20M238 80v20"/></g>` +
-    `<text x="160" y="146" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#4a5b70">${label.replace(/[<>&"]/g, "")}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="${cssVar("--thumb-bg")}"/>` +
+    `<g fill="none" stroke="${cssVar("--accent")}" stroke-width="6" stroke-linecap="round"><path d="M110 90h100M96 70v40M224 70v40M82 80v20M238 80v20"/></g>` +
+    `<text x="160" y="146" text-anchor="middle" font-family="sans-serif" font-size="15" fill="${cssVar("--muted")}">${label.replace(/[<>&"]/g, "")}</text></svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
@@ -138,7 +141,7 @@ let lastError = false;
 function setStatus(s) {
   const el = $("saveStatus");
   el.dataset.state = s;
-  el.textContent = { saving: "Kaydediliyor...", saved: "Kaydedildi ✓", offline: "Çevrimdışı", idle: "" }[s] || "";
+  el.textContent = { saving: "Kaydediliyor…", saved: "Kaydedildi ✓", offline: "Çevrimdışı", idle: "" }[s] || "";
 }
 
 function refreshConnectionUi() {
@@ -462,17 +465,17 @@ function noProgramCard() {
     type: "button", class: "btn", text: "Kimliği kopyala",
     onclick: async () => {
       try { await navigator.clipboard.writeText(state.uid); copyBtn.textContent = "Kopyalandı ✓"; }
-      catch { copyBtn.textContent = "Kimliği elle seçip kopyalayın"; }
+      catch { copyBtn.textContent = "Kopyalanamadı, kimliği elle seçip kopyala"; }
     }
   });
   return missing
     ? h("div", { class: "card day-head no-program" },
         h("h2", { text: "Program atanmadı" }),
-        h("p", { class: "sub", text: "Size henüz kişisel bir program tanımlanmamış. Aşağıdaki kullanıcı kimliğini program hazırlayan kişiye iletin." }),
+        h("p", { class: "sub", text: "Sana henüz kişisel bir program tanımlanmamış. Aşağıdaki kullanıcı kimliğini program hazırlayan kişiye ilet." }),
         uidBox, copyBtn)
     : h("div", { class: "card day-head no-program" },
         h("h2", { text: "Program yüklenemedi" }),
-        h("p", { class: "sub", text: "Bağlantıyı kontrol edip sayfayı yenileyin." }));
+        h("p", { class: "sub", text: "Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip sayfayı yenile." }));
 }
 
 // Eski uygulamadaki anahtarlar: postur-check-<gün>-<n> ("1"), postur-v3-<gün>-<n>-set-<i> ("1"),
@@ -593,14 +596,14 @@ function setMode(mode) {
   renderProgram();
 }
 
-// iOS tarzı SALON | EVDE seçici.
+// iOS tarzı Salon | Evde seçici.
 function modeSwitch() {
   const opt = (mode, label) => h("button", {
     type: "button", role: "radio", class: "seg-btn", "aria-checked": String(state.mode === mode),
     text: label, onclick: () => setMode(mode)
   });
   return h("div", { class: "segmented", role: "radiogroup", "aria-label": "Antrenman yeri" },
-    opt("gym", "SALON"), opt("home", "EVDE"));
+    opt("gym", "Salon"), opt("home", "Evde"));
 }
 
 function renderProgram() {
@@ -728,7 +731,7 @@ function exerciseCard(date, item, order, mode = "gym") {
   const setRow = (i, s) => {
     const btn = h("button", {
       type: "button", class: "chk", role: "checkbox",
-      "aria-pressed": String(!!s.completed), "aria-label": `Set ${i + 1} tamamlandı`, text: "✓"
+      "aria-checked": String(!!s.completed), "aria-label": `Set ${i + 1} tamamlandı`, text: "✓"
     });
     // Süreli hareket: sayaç bitince set işaretlenir. Kart o an ekranda değilse (gün değişti vb.) doğrudan kaydedilir.
     const workKey = `${date}|${item.key}|${i}`;
@@ -772,7 +775,7 @@ function exerciseCard(date, item, order, mode = "gym") {
         cur.weight = last; // son ağırlık başlangıç önerisi
         input.value = String(last).replace(".", ",");
       }
-      btn.setAttribute("aria-pressed", String(cur.completed));
+      btn.setAttribute("aria-checked", String(cur.completed));
       saveNow(date);
       if (cur.completed && $("autoTimer").checked) timerStart(90);
       // Yalnızca kullanıcı bir seti işaretleyip hareketin tüm setleri bittiğinde ilerle (geri almada kaydırma yok).
@@ -789,16 +792,33 @@ function exerciseCard(date, item, order, mode = "gym") {
 
   drawSets();
 
-  const changeSets = (delta) => {
-    const e = ensureEntry(date, item, order);
-    const next = e.sets.length + delta;
-    if (next < 1 || next > 6) return;
-    if (delta > 0) e.sets.push({ completed: false, weight: null });
-    else e.sets.pop();
-    e.touched = true;
+  const applySets = () => {
+    ensureEntry(date, item, order).touched = true;
     drawSets();
     saveNow(date);
     refreshDayDone(date);
+  };
+  const changeSets = (delta) => {
+    const e = ensureEntry(date, item, order);
+    const next = e.sets.length + delta;
+    if (next < 1 || next > 6) {
+      toast(next < 1 ? "En az 1 set olmalı." : "En fazla 6 set eklenebilir.");
+      return;
+    }
+    if (delta > 0) { e.sets.push({ completed: false, weight: null }); applySets(); return; }
+    const removed = e.sets.pop();
+    const n = e.sets.length + 1;
+    applySets();
+    // Silinen set (işaret ve ağırlığıyla) 5 sn içinde geri alınabilir.
+    toast(`${name}: Set ${n} silindi.`, {
+      action: "Geri al",
+      onAction: () => {
+        const cur = ensureEntry(date, item, order);
+        if (cur.sets.length >= 6) return;
+        cur.sets.push(removed);
+        applySets();
+      }
+    });
   };
 
   const videoTitle = video?.title || name;
@@ -834,7 +854,7 @@ function exerciseCard(date, item, order, mode = "gym") {
     h("div", { class: "ex-actions" },
       h("button", { type: "button", class: "btn small", "aria-label": "Set çıkar", text: "−", onclick: () => changeSets(-1) }),
       h("button", { type: "button", class: "btn small", "aria-label": "Set ekle", text: "+", onclick: () => changeSets(1) }),
-      h("button", { type: "button", class: "btn", text: "⏱ Dinlenme", onclick: () => timerStart() }),
+      h("button", { type: "button", class: "btn", onclick: () => timerStart() }, h("span", { "aria-hidden": "true", text: "⏱" }), "Dinlenme"),
       video
         ? h("a", { class: "btn", href: ytWatch(video.id, video.start), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da aç ↗" })
         : h("a", { class: "btn", href: ytSearch(lib.search || name), target: "_blank", rel: "noopener noreferrer", text: "YouTube'da ara ↗" })
@@ -941,14 +961,14 @@ function sparkline(points) {
   const line = document.createElementNS(NS, "polyline");
   line.setAttribute("points", coords.map((c) => c.join(",")).join(" "));
   line.setAttribute("fill", "none");
-  line.setAttribute("stroke", "#2563eb");
+  line.setAttribute("stroke", "currentColor"); // renk CSS'ten (--accent)
   line.setAttribute("stroke-width", "2");
   line.setAttribute("stroke-linecap", "round");
   line.setAttribute("stroke-linejoin", "round");
   svg.append(line);
   const last = coords[coords.length - 1];
   const dot = document.createElementNS(NS, "circle");
-  dot.setAttribute("cx", last[0]); dot.setAttribute("cy", last[1]); dot.setAttribute("r", "3"); dot.setAttribute("fill", "#2563eb");
+  dot.setAttribute("cx", last[0]); dot.setAttribute("cy", last[1]); dot.setAttribute("r", "3"); dot.setAttribute("fill", "currentColor");
   svg.append(dot);
   return svg;
 }
@@ -1027,7 +1047,9 @@ function showView(name) {
   $("viewHistory").hidden = name !== "history";
   $("viewStats").hidden = name !== "stats";
   $("dayTabs").hidden = name !== "program";
-  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("is-active", b.dataset.view === name));
+  document.querySelectorAll(".nav-btn").forEach((b) => {
+    if (b.dataset.view === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
   renderCurrent();
   window.scrollTo(0, 0);
 }
@@ -1184,9 +1206,7 @@ function workToggle(key, duration, btn, chk, done, info) {
   });
   $("workName").textContent = info.name;
   $("workSet").textContent = info.set;
-  $("workScreen").hidden = false;
-  document.body.classList.add("modal-open");
-  $("workPause").focus();
+  openModal($("workScreen"), { close: workCancel, focus: $("workPause"), returnFocus: btn });
   work.iv = setInterval(workTick, 250);
   keepAwake(true);
   workRender();
@@ -1219,20 +1239,14 @@ function workCancel() {
   clearInterval(work.iv);
   if (work.btn) workIdle(work.btn, work.total);
   const focusBack = work.btn?.isConnected ? work.btn : null;
-  const wasOpen = !$("workScreen").hidden;
   Object.assign(work, { key: null, iv: null, btn: null, chk: null, done: null, paused: false });
-  $("workScreen").hidden = true;
-  if (wasOpen) {
-    document.body.classList.remove("modal-open");
-    focusBack?.focus({ preventScroll: true });
-  }
+  closeModal($("workScreen"), focusBack);
   keepAwake(false);
 }
 
 function initWork() {
   $("workPause").addEventListener("click", workPauseToggle);
   $("workStop").addEventListener("click", workCancel);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && work.key) workCancel(); });
 }
 
 function workFinish() {
@@ -1241,7 +1255,7 @@ function workFinish() {
   beep(3);
   try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* desteklenmiyor */ }
   // Ekrandaki ✓ düğmesine basılmış gibi: kayıt, otomatik dinlenme ve sonraki harekete geçiş aynı yoldan.
-  if (chk?.isConnected) { if (chk.getAttribute("aria-pressed") !== "true") chk.click(); }
+  if (chk?.isConnected) { if (chk.getAttribute("aria-checked") !== "true") chk.click(); }
   else done?.();
 }
 
@@ -1285,13 +1299,122 @@ async function keepAwake(on) {
 }
 
 /* ============================================================
+   MODAL YÖNETİMİ: odak modal içinde kalır, Escape ve arka plana dokunma kapatır,
+   kapanınca odak açan öğeye döner. Her modal kendi `close` işleviyle kapanır.
+   ============================================================ */
+
+const modalStack = []; // { el, close, returnFocus }
+
+const focusables = (el) => [...el.querySelectorAll(
+  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select, iframe, [tabindex]:not([tabindex="-1"])'
+)].filter((x) => !x.hidden && x.getClientRects().length > 0);
+
+function openModal(el, { close, focus, returnFocus } = {}) {
+  if (modalStack.some((m) => m.el === el)) return;
+  modalStack.push({ el, close: close || (() => closeModal(el)), returnFocus: returnFocus || document.activeElement });
+  el.hidden = false;
+  document.body.classList.add("modal-open");
+  (focus || focusables(el)[0])?.focus();
+}
+
+// returnFocus verilirse kayıtlı öğe yerine ona dönülür (ör. yeniden çizilen set düğmesi).
+function closeModal(el, returnFocus) {
+  const i = modalStack.findIndex((m) => m.el === el);
+  if (i < 0) return;
+  const [m] = modalStack.splice(i, 1);
+  el.hidden = true;
+  if (!modalStack.length) document.body.classList.remove("modal-open");
+  const back = returnFocus || m.returnFocus;
+  if (back?.isConnected) back.focus({ preventScroll: true });
+}
+
+function initModals() {
+  document.addEventListener("keydown", (e) => {
+    const top = modalStack[modalStack.length - 1];
+    if (!top) return;
+    if (e.key === "Escape") { e.preventDefault(); top.close(); return; }
+    if (e.key !== "Tab") return;
+    const list = focusables(top.el);
+    if (!list.length) { e.preventDefault(); return; }
+    const first = list[0], last = list[list.length - 1];
+    if (!top.el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+  // Alt sayfa modallarında arka plana dokunmak kapatır (tam ekran sayaçta arka plan yok).
+  document.querySelectorAll(".modal").forEach((el) => el.addEventListener("click", (e) => {
+    if (e.target !== el) return;
+    modalStack.find((m) => m.el === el)?.close();
+  }));
+}
+
+/* ---------- Kısa bildirim (toast) ---------- */
+
+let toastTimer = null;
+let toastAction = null;
+
+// Bilgi ya da "Geri al" için; 5 sn sonra kendiliğinden kapanır. alert() yerine kullanılır.
+function toast(message, { action, onAction, duration = 5000 } = {}) {
+  const el = $("toast"), btn = $("toastAction");
+  clearTimeout(toastTimer);
+  toastAction = onAction || null;
+  btn.hidden = !action;
+  btn.textContent = action || "";
+  el.hidden = false;
+  $("toastMsg").textContent = "";
+  requestAnimationFrame(() => { $("toastMsg").textContent = message; }); // ekran okuyucu değişikliği duyursun
+  toastTimer = setTimeout(hideToast, duration);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastAction = null;
+  $("toast").hidden = true;
+}
+
+function initToast() {
+  $("toastAction").addEventListener("click", () => {
+    const fn = toastAction;
+    hideToast();
+    fn?.();
+  });
+}
+
+/* ---------- Onay sayfası (confirm() yerine) ---------- */
+
+let confirmResolve = null;
+
+function confirmSheet({ title, text, ok, danger = false }) {
+  confirmResolve?.(false);
+  $("confirmTitle").textContent = title;
+  $("confirmText").textContent = text || "";
+  $("confirmText").hidden = !text;
+  const okBtn = $("confirmOk");
+  okBtn.textContent = ok;
+  okBtn.className = `btn btn-block ${danger ? "btn-danger" : "btn-primary"}`;
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    openModal($("confirmModal"), { close: () => finishConfirm(false), focus: $("confirmCancel") });
+  });
+}
+
+function finishConfirm(result) {
+  const fn = confirmResolve;
+  confirmResolve = null;
+  closeModal($("confirmModal"));
+  fn?.(result);
+}
+
+function initConfirm() {
+  $("confirmOk").addEventListener("click", () => finishConfirm(true));
+  $("confirmCancel").addEventListener("click", () => finishConfirm(false));
+}
+
+/* ============================================================
    VİDEO MODALI (iframe yalnızca kullanıcı tıklayınca oluşturulur)
    ============================================================ */
 
-let modalReturnFocus = null;
-
 function openVideo(id, title, trigger, start = 0) {
-  modalReturnFocus = trigger || null;
   $("videoTitle").textContent = title;
   $("videoLink").href = ytWatch(id, start);
   const iframe = h("iframe", {
@@ -1303,9 +1426,7 @@ function openVideo(id, title, trigger, start = 0) {
     allowfullscreen: true, referrerpolicy: "strict-origin-when-cross-origin"
   });
   $("videoFrame").replaceChildren(iframe);
-  $("videoModal").hidden = false;
-  document.body.classList.add("modal-open");
-  $("videoClose").focus();
+  openModal($("videoModal"), { close: closeVideo, focus: $("videoClose"), returnFocus: trigger });
   fullscreenOnPlay(iframe);
 }
 
@@ -1344,9 +1465,7 @@ function fullscreenOnPlay(iframe) {
 
 function closeVideo() {
   $("videoFrame").replaceChildren(); // iframe'i kaldır (video durur)
-  $("videoModal").hidden = true;
-  document.body.classList.remove("modal-open");
-  if (modalReturnFocus && modalReturnFocus.focus) modalReturnFocus.focus();
+  closeModal($("videoModal"));
 }
 
 // Video listesi içe aktarma: adresin sonuna #videolar eklenince açılır; JSON yalnızca kullanıcının kendi alanına yazılır.
@@ -1354,14 +1473,11 @@ function openVideoImport() {
   if (!state.uid) return;
   $("importText").value = "";
   $("importError").hidden = true;
-  $("importModal").hidden = false;
-  document.body.classList.add("modal-open");
-  $("importText").focus();
+  openModal($("importModal"), { close: closeVideoImport, focus: $("importText") });
 }
 
 function closeVideoImport() {
-  $("importModal").hidden = true;
-  document.body.classList.remove("modal-open");
+  closeModal($("importModal"));
   if (location.hash === "#videolar") history.replaceState(null, "", location.pathname + location.search);
 }
 
@@ -1370,7 +1486,7 @@ async function saveVideoImport() {
   let items = null;
   try { items = validVideos(JSON.parse($("importText").value)); } catch { /* geçersiz JSON */ }
   if (!items || !Object.keys(items).length) {
-    err.textContent = "Geçersiz liste. JSON'u eksiksiz yapıştırdığından emin ol.";
+    err.textContent = "Liste okunamadı: JSON eksik ya da biçimi hatalı. Listenin tamamını yeniden yapıştırıp tekrar dene.";
     err.hidden = false;
     return;
   }
@@ -1381,9 +1497,9 @@ async function saveVideoImport() {
     lsSet(videosCacheKey(), JSON.stringify(items));
     closeVideoImport();
     renderCurrent();
-    alert(`${Object.keys(items).length} video kaydedildi.`);
+    toast(`${Object.keys(items).length} video kaydedildi.`);
   } catch (e) {
-    err.textContent = "Kaydedilemedi. Bağlantını kontrol edip tekrar dene.";
+    err.textContent = "Liste kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.";
     err.hidden = false;
   } finally {
     $("importSave").disabled = false;
@@ -1398,8 +1514,6 @@ function initVideoImport() {
 
 function initModal() {
   $("videoClose").addEventListener("click", closeVideo);
-  $("videoModal").addEventListener("click", (e) => { if (e.target === $("videoModal")) closeVideo(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("videoModal").hidden) closeVideo(); });
 }
 
 /* ============================================================
@@ -1408,14 +1522,14 @@ function initModal() {
 
 function authMessage(code) {
   switch (code) {
-    case "auth/invalid-email": return "E-posta adresi geçersiz.";
-    case "auth/user-disabled": return "Bu hesap devre dışı.";
+    case "auth/invalid-email": return "E-posta adresi geçerli değil. Yazımını kontrol edip tekrar dene.";
+    case "auth/user-disabled": return "Bu hesap devre dışı bırakılmış. Açılması için yöneticiye yaz.";
     case "auth/user-not-found":
     case "auth/wrong-password":
-    case "auth/invalid-credential": return "E-posta veya şifre hatalı.";
-    case "auth/too-many-requests": return "Çok fazla deneme. Biraz bekleyip tekrar deneyin.";
-    case "auth/network-request-failed": return "Bağlantı hatası. İnternetinizi kontrol edin.";
-    default: return "Giriş yapılamadı. Lütfen tekrar deneyin.";
+    case "auth/invalid-credential": return "E-posta ya da şifre hatalı. Kontrol edip tekrar dene.";
+    case "auth/too-many-requests": return "Çok fazla deneme yapıldı. Birkaç dakika bekleyip tekrar dene.";
+    case "auth/network-request-failed": return "Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dene.";
+    default: return "Giriş yapılamadı. Biraz sonra tekrar dene.";
   }
 }
 
@@ -1468,6 +1582,8 @@ function onSignedOut() {
   Object.values(debounceTimers).forEach(clearTimeout);
   timerReset();
   workCancel();
+  [...modalStack].reverse().forEach((m) => m.close());
+  hideToast();
   showLogin();
 }
 
@@ -1489,7 +1605,7 @@ function initLogin() {
     if (!configured) return;
     const email = $("loginEmail").value.trim();
     const password = $("loginPassword").value;
-    if (!email || !password) { showLogin("E-posta ve şifre girin."); return; }
+    if (!email || !password) { showLogin("Giriş için e-posta adresini ve şifreni yaz."); return; }
     const btn = $("loginSubmit");
     btn.disabled = true;
     btn.textContent = "Giriş yapılıyor…";
@@ -1501,11 +1617,19 @@ function initLogin() {
       showLogin(authMessage(err.code));
     } finally {
       btn.disabled = false;
-      btn.textContent = "Giriş Yap";
+      btn.textContent = "Giriş yap";
     }
   });
   $("logoutBtn").addEventListener("click", async () => {
-    try { await signOut(auth); } catch (err) { console.error(err); }
+    const ok = await confirmSheet({
+      title: "Çıkış yapılsın mı?",
+      text: "Tekrar girmek için e-posta adresin ve şifren gerekecek.",
+      ok: "Çıkış yap", danger: true
+    });
+    if (!ok) return;
+    // Bekleyen (debounce'taki) kayıtlar çıkıştan önce gönderilir; yoksa onSignedOut onları siler.
+    await Promise.all(Object.keys(debounceTimers).filter((d) => state.docs[d]).map((d) => saveNow(d)));
+    try { await signOut(auth); } catch (err) { console.error(err); toast("Çıkış yapılamadı. Tekrar dene."); }
   });
 }
 
@@ -1547,12 +1671,15 @@ function boot() {
   initNav();
   initTimer();
   initWork();
+  initModals();
+  initToast();
+  initConfirm();
   initModal();
   initVideoImport();
   initLifecycle();
 
   if (!configured) {
-    showLogin("Firebase yapılandırması eksik. public/firebase-config.js dosyasına firebaseConfig değerlerini yapıştırın.");
+    showLogin("Firebase yapılandırması eksik. public/firebase-config.js dosyasına firebaseConfig değerlerini yapıştır.");
     $("loginSubmit").disabled = true;
     return;
   }
@@ -1560,7 +1687,7 @@ function boot() {
     initFirebase();
   } catch (err) {
     console.error(err);
-    showLogin("Firebase başlatılamadı. firebase-config.js değerlerini kontrol edin.");
+    showLogin("Firebase başlatılamadı. firebase-config.js değerlerini kontrol et.");
     return;
   }
   onAuthStateChanged(auth, (user) => {

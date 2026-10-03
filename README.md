@@ -13,6 +13,8 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 - **Dinlenme sayacı:** Set bitince otomatik başlayabilen dinlenme zamanlayıcısı.
 - **Süreli hareketler:** Plank gibi süreli hareketlerde her setin yanındaki ▶ tam ekran sayacı açar; 3 sn hazırlıktan sonra sayar, duraklatılabilir, bitince bip sesiyle seti kendisi işaretler.
 - **Geçmiş ve istatistik:** Önceki antrenmanlarını ve toplamlarını gör.
+- **Koyu tema:** Telefonun ayarına göre açık ya da koyu görünür; yazı boyutu ayarını da izler.
+- **Geri al:** Silinen bir seti 5 saniye içinde geri alabilirsin.
 - **Çevrimdışı:** İnternet yokken de işaretlemeye devam et; bağlantı gelince kayıtlar eşitlenir.
 
 ## Kullanım
