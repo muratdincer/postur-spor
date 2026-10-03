@@ -121,19 +121,26 @@
         <button id="timerClose" type="button" class="btn btn-ghost">Kapat</button>
       </div>
     </section>
-    <!-- SÜRELİ HAREKET SAYACI (tam ekran) -->
+    <!-- SET SAYACI (tam ekran, müzikli) -->
     <div id="workScreen" class="work-screen" role="dialog" aria-modal="true" aria-labelledby="workName" data-phase="prep" hidden>
       <div class="work-info">
         <h2 id="workName" class="work-name"></h2>
         <div id="workSet" class="work-set"></div>
+        <p id="workHint" class="work-hint" hidden></p>
       </div>
       <div class="work-center">
         <div id="workPhase" class="work-phase"></div>
         <output id="workTime" class="work-time" aria-live="off"></output>
         <div class="work-bar"><div id="workBar"></div></div>
+        <div class="work-music">
+          <p id="workTrack" class="work-track"></p>
+          <button id="workMusic" type="button" class="btn btn-ghost" aria-pressed="true">Müziği kapat</button>
+        </div>
       </div>
       <div class="work-actions">
         <button id="workPause" type="button" class="btn">Duraklat</button>
+        <button id="workExtend" type="button" class="btn" aria-label="15 saniye ekle" hidden>+15 sn</button>
+        <button id="workFinish" type="button" class="btn">Seti bitir</button>
         <button id="workStop" type="button" class="btn btn-ghost">İptal</button>
       </div>
     </div>
@@ -175,6 +182,20 @@
           <p id="restInfo" class="modal-text"></p>
         </section>
 
+        <section class="settings-sec" aria-labelledby="musicTitle">
+          <h3 id="musicTitle">Müzik</h3>
+          <label class="check-row">
+            <input id="musicOn" type="checkbox">
+            <span>Set sayacında müzik çal</span>
+          </label>
+          <p class="modal-text">Setin ▶ düğmesine dokununca sayaç başlar, müzik çalar; set bitince müzik de durur. Her harekete türüne uygun bir müzik atanır. Sayaç müziği çalarken telefonda çalan başka müzik (ör. Spotify) duraklar; kendi müziğini dinlemek istersen bu ayarı kapat.</p>
+          <details class="music-credits">
+            <summary>Müzik listesi ve lisans</summary>
+            <ul id="musicList"></ul>
+            <p>Müzikler: Kevin MacLeod (<a href="https://incompetech.com" target="_blank" rel="noopener noreferrer">incompetech.com</a>), <a href="https://creativecommons.org/licenses/by/4.0/deed.tr" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> lisansıyla.</p>
+          </details>
+        </section>
+
         <section class="settings-sec" aria-labelledby="programTitle">
           <h3 id="programTitle">Program</h3>
           <p id="programInfo" class="modal-text"></p>
@@ -206,7 +227,7 @@
           <button id="logoutBtn" type="button" class="btn btn-block btn-danger">Çıkış yap</button>
         </section>
 
-        <p class="modal-text settings-note">Görünüm ve dinlenme ayarları bu cihazda saklanır; antrenman kayıtların hesabında.</p>
+        <p class="modal-text settings-note">Görünüm, dinlenme ve müzik ayarları bu cihazda saklanır; antrenman kayıtların hesabında.</p>
       </div>
     </div>
 

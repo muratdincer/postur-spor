@@ -56,11 +56,13 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.href.startsWith(SDK)) {
     event.respondWith(cacheFirst(req));
-  } else if (url.origin === self.location.origin && !url.pathname.startsWith("/__/")) {
+  } else if (url.origin === self.location.origin && !url.pathname.startsWith("/__/") && !url.pathname.startsWith("/music/")) {
     // /__/ Firebase Hosting'in ayrılmış adresleri (auth yardımcıları vb.); dokunulmaz.
+    // /music/ ses dosyaları tarayıcının kendi yolundan (HTTP önbelleği) gelir: iOS ses için parça parça
+    // (Range) istek yapar, önbellekten verilen tam yanıtı çalmayabilir.
     event.respondWith(shell(event));
   }
-  // Diğer her şey (Firestore, Auth, YouTube) tarayıcının normal yolundan gider.
+  // Diğer her şey (Firestore, Auth, YouTube, müzik) tarayıcının normal yolundan gider.
 });
 
 async function cacheFirst(req) {
