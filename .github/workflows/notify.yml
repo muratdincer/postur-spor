@@ -1,0 +1,46 @@
+name: Zamanlanmış bildirimler
+
+# 15 dakikada bir: zamanı gelen hatırlatma, akşam hatırlatması ve haftalık özeti gönderir (scripts/notify.mjs).
+# GitHub'ın zamanlayıcısı birkaç dakika, yoğunlukta daha fazla gecikebilir.
+# Not: repoda 60 gün hiç değişiklik olmazsa GitHub zamanlanmış işleri durdurur; Actions sayfasından yeniden açılır.
+# Elle çalıştırmada "force" ile bir tür saatten bağımsız hemen gönderilir (deneme).
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Hemen gönder (deneme): none = normal çalışma"
+        type: choice
+        options: [none, reminder, evening, weekly]
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Bağımlılıklar
+        run: npm install --no-save --no-audit --no-fund --prefix scripts firebase-admin@12 web-push@3
+
+      - name: Bildirimleri gönder
+        env:
+          FORCE: ${{ inputs.force }}
+        run: node scripts/notify.mjs
