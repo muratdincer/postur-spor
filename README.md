@@ -16,6 +16,7 @@ Kişisel spor ve postür takip uygulaması. Telefonda kullanılmak üzere tasarl
 - **Geçmiş ve istatistik:** Önceki antrenmanlarını ve toplamlarını gör.
 - **Ayarlar:** Sağ üstteki dişliden görünüm (Sistem / Açık / Koyu), otomatik dinlenme, müzik, verilerini dışa aktarma (CSV / JSON) ve çıkış.
 - **Yapay zekâ ile program:** Ayarlar > Program > "Yapay zekâ ile içe aktar". Uygulamanın hazırladığı talimatı kendi yapay zekâ hesabına (ChatGPT, Claude, Gemini…) yapıştır, soruları orada cevapla, son cevabı geri yapıştır; uygulama kontrol edip önizler, onaylarsan yükler. Önceki programa ya da hazır programa Ayarlar'dan dönebilirsin.
+- **Bildirimler:** Ana ekrana eklenmiş uygulamada Ayarlar > Bildirimler > "Bildirimleri aç". Uygulama kapalıyken de gelir. Antrenman hatırlatması (antrenman günlerinde, varsayılan 08:00; o gün başladıysan gelmez), akşam hatırlatması (hiç set işaretlemediysen, 20:00) ve Pazar haftalık özeti (20:30) ayrı ayrı açılıp saatleri değiştirilebilir. Gönderimi GitHub Actions 15 dakikada bir yapar; birkaç dakika gecikebilir.
 - **Koyu tema ve yazı boyutu:** Varsayılan olarak telefonun ayarlarını izler.
 - **Geri al:** Silinen bir seti 5 saniye içinde geri alabilirsin.
 - **Çevrimdışı:** İnternet yokken de uygulamayı açıp işaretlemeye devam et; bağlantı gelince kayıtlar eşitlenir. Bağlantı varken her açılışta en son sürüm gelir.

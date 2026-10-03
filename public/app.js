@@ -2001,6 +2001,7 @@ async function refreshPushSettings() {
     on.hidden = !enable;
     off.hidden = !sub;
     test.hidden = !sub;
+    $("notifyPrefs").hidden = true;
   };
   if (!pushSupported()) {
     show(isIos() && !isStandalone()
@@ -2015,6 +2016,8 @@ async function refreshPushSettings() {
   const sub = await currentPushSub().catch(() => null);
   if (sub && Notification.permission === "granted") {
     show("Bu cihaz bildirim alıyor.", { sub: true });
+    $("notifyPrefs").hidden = false;
+    loadNotifyPrefs();
     saveSubscription(sub).catch(() => {}); // kayıt silinmiş ya da başka hesaba aitse yeniden yaz
     return;
   }
@@ -2081,7 +2084,59 @@ async function testPushLocal() {
   } catch { toast("Deneme bildirimi gösterilemedi."); }
 }
 
+/* ---------- Zamanlanmış bildirim tercihleri (hesapta; gönderen scripts/notify.mjs) ---------- */
+
+const notifyRef = () => doc(db, "users", state.uid, "settings", "notifications");
+const NOTIFY_DEFAULTS = { reminder: { on: true, time: "08:00" }, evening: { on: true, time: "20:00" }, weekly: { on: true, time: "20:30" } };
+const NOTIFY_IDS = { reminder: "nReminder", evening: "nEvening", weekly: "nWeekly" };
+let notifyPrefs = null;
+
+async function loadNotifyPrefs() {
+  if (!notifyPrefs) {
+    let stored = {};
+    try { stored = (await getDoc(notifyRef())).data() || {}; } catch { /* çevrimdışı: varsayılanlar */ }
+    notifyPrefs = Object.fromEntries(Object.entries(NOTIFY_DEFAULTS).map(([k, d]) => [k, { ...d, ...(stored[k] || {}) }]));
+  }
+  for (const [k, id] of Object.entries(NOTIFY_IDS)) {
+    $(`${id}On`).checked = notifyPrefs[k].on;
+    $(`${id}Time`).value = notifyPrefs[k].time;
+    $(`${id}Time`).disabled = !notifyPrefs[k].on;
+  }
+}
+
+// Değişiklik hemen kaydedilir (ayrı "Kaydet" yok); sonuç durum satırında söylenir.
+async function saveNotifyPrefs() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Istanbul";
+  $("notifyStatus").textContent = "Kaydediliyor…";
+  try {
+    await setDoc(notifyRef(), { ...notifyPrefs, tz });
+    const on = Object.entries(notifyPrefs).filter(([, p]) => p.on);
+    $("notifyStatus").textContent = on.length
+      ? "Kaydedildi. Bildirimler seçtiğin saatten birkaç dakika sonra gelebilir."
+      : "Kaydedildi. Zamanlanmış bildirimlerin hepsi kapalı.";
+  } catch {
+    $("notifyStatus").textContent = "Kaydedilemedi. İnternet bağlantını kontrol edip tekrar dene.";
+  }
+}
+
+function initNotifyPrefs() {
+  for (const [k, id] of Object.entries(NOTIFY_IDS)) {
+    $(`${id}On`).addEventListener("change", (e) => {
+      if (!notifyPrefs) return;
+      notifyPrefs[k].on = e.target.checked;
+      $(`${id}Time`).disabled = !e.target.checked;
+      saveNotifyPrefs();
+    });
+    $(`${id}Time`).addEventListener("change", (e) => {
+      if (!notifyPrefs || !/^\d{2}:\d{2}$/.test(e.target.value)) return;
+      notifyPrefs[k].time = e.target.value;
+      saveNotifyPrefs();
+    });
+  }
+}
+
 function initPush() {
+  initNotifyPrefs();
   $("pushOn").addEventListener("click", enablePush);
   $("pushOff").addEventListener("click", () => disablePush());
   $("pushTest").addEventListener("click", testPushLocal);
@@ -2923,6 +2978,7 @@ function showLogin(message) {
 
 async function onSignedIn(user) {
   state.uid = user.uid;
+  notifyPrefs = null;
   state.docs = {};
   state.historyLoaded = false;
   state.loading = true;

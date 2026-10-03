@@ -200,6 +200,21 @@
           <h3 id="pushTitle">Bildirimler</h3>
           <p id="pushInfo" class="modal-text" role="status"></p>
           <button id="pushOn" type="button" class="btn btn-primary btn-block" hidden>Bildirimleri aç</button>
+          <div id="notifyPrefs" class="notify-prefs" hidden>
+            <div class="notify-row">
+              <label class="check-row"><input id="nReminderOn" type="checkbox"><span>Antrenman hatırlatması<small>Antrenman günlerinde; o gün başladıysan gelmez.</small></span></label>
+              <input id="nReminderTime" type="time" class="time-input" aria-label="Antrenman hatırlatması saati">
+            </div>
+            <div class="notify-row">
+              <label class="check-row"><input id="nEveningOn" type="checkbox"><span>Akşam hatırlatması<small>Antrenman gününde hiç set işaretlemediysen.</small></span></label>
+              <input id="nEveningTime" type="time" class="time-input" aria-label="Akşam hatırlatması saati">
+            </div>
+            <div class="notify-row">
+              <label class="check-row"><input id="nWeeklyOn" type="checkbox"><span>Haftalık özet<small>Pazar günleri: antrenman ve set sayısı.</small></span></label>
+              <input id="nWeeklyTime" type="time" class="time-input" aria-label="Haftalık özet saati">
+            </div>
+            <p id="notifyStatus" class="modal-text" role="status" aria-live="polite">Bildirimler seçtiğin saatten birkaç dakika sonra gelebilir.</p>
+          </div>
           <div class="settings-row">
             <button id="pushTest" type="button" class="btn" hidden>Deneme bildirimi göster</button>
             <button id="pushOff" type="button" class="btn" hidden>Bu cihazda kapat</button>
@@ -237,7 +252,7 @@
           <button id="logoutBtn" type="button" class="btn btn-block btn-danger">Çıkış yap</button>
         </section>
 
-        <p class="modal-text settings-note">Görünüm, dinlenme, müzik ve bildirim ayarları bu cihazda saklanır; antrenman kayıtların hesabında.</p>
+        <p class="modal-text settings-note">Görünüm, dinlenme ve müzik ayarları bu cihazda saklanır; bildirim saatleri ve antrenman kayıtların hesabında.</p>
       </div>
     </div>
 
